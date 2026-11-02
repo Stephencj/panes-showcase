@@ -97,6 +97,7 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
     // MARK: capture
 
     private func open(_ id: UInt32, viewport: Size?) async {
+        let t0 = Date()
         guard let window = try? await Windows.scWindow(id), let frame = Windows.frame(id) else {
             send(Control(op: "error", error: "That window is gone."))
             return
@@ -108,8 +109,15 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
             let target = CGRect(x: area.midX - size.width / 2, y: area.minY, width: size.width, height: size.height)
             queue.sync { originalFrame = frame }
             Windows.setFrame(id, target)
+            // The window server applies the new size a moment later; wait for
+            // it so the stream starts at the window's real shape.
+            for _ in 0..<20 {
+                if let f = Windows.frame(id), f.size != frame.size { break }
+                try? await Task.sleep(for: .milliseconds(25))
+            }
         }
         let now = Windows.frame(id) ?? frame
+        print("open \(id): window ready after \(Int(Date().timeIntervalSince(t0) * 1000)) ms")
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let config = SCStreamConfiguration()
         let scale = CGFloat(filter.pointPixelScale)
@@ -124,6 +132,7 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
         do {
             try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
             try await stream.startCapture()
+            print("open \(id): capturing after \(Int(Date().timeIntervalSince(t0) * 1000)) ms")
         } catch {
             send(Control(op: "error", error: "Can't capture that window: \(error.localizedDescription)"))
             return

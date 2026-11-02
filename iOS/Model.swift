@@ -8,9 +8,13 @@ struct Machine: Identifiable, Hashable, Codable {
     /// home-network address.
     var hosts: [String]
 
-    static let defaults = [
-        Machine(name: "Mac mini", hosts: ["my-mac-mini", "100.64.0.10", "192.168.1.10"]),
-    ]
+    static let defaults: [Machine] = {
+        // Tests point the app at an agent on this Mac with PANES_HOSTS=127.0.0.1.
+        if let hosts = ProcessInfo.processInfo.environment["PANES_HOSTS"] {
+            return [Machine(name: "Mac mini", hosts: hosts.split(separator: ",").map(String.init))]
+        }
+        return [Machine(name: "Mac mini", hosts: ["my-mac-mini", "100.64.0.10", "192.168.1.10"])]
+    }()
 }
 
 /// One tab: a window on a machine, streamed over its own connection.

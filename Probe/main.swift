@@ -124,7 +124,12 @@ func handle(_ frame: Frame) {
             break
         }
     case .videoFormat:
-        if let sets = Wire.parseVideoFormat(frame.payload) { format = VideoSamples.format(sets); decoder = nil }
+        if let sets = Wire.parseVideoFormat(frame.payload), let f = VideoSamples.format(sets) {
+            format = f
+            decoder = nil
+            let d = CMVideoFormatDescriptionGetDimensions(f)
+            summary["streamSizes"] = (summary["streamSizes"] as? [String] ?? []) + ["\(d.width)x\(d.height)"]
+        }
     case .videoFrame:
         guard let f = Wire.parseVideoFrame(frame.payload), let format else { return }
         framesSeen += 1
