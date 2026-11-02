@@ -18,6 +18,7 @@
 		48B29E080738A1F80CD8F866 /* VideoSamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2386EDDEE0862E84DFA0123E /* VideoSamples.swift */; };
 		5C3627121D7E37EC021DE2B1 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8E0575BDFD4229FA1CE2407 /* Agent.swift */; };
 		68577474D0F4D888E0375104 /* Wire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97341ACCCA8D3BD786C61E8D /* Wire.swift */; };
+		6E99809692781FE7E8E51CC7 /* Peers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B29ECF9D87FE431CE9AF902 /* Peers.swift */; };
 		7A2134818F2EA0AC0E1F3E58 /* SharedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10143F1DAF004874F14762F /* SharedTests.swift */; };
 		803A26E4FCED1648362BDD90 /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5A26CE2262690FF5B2FB1D /* StreamView.swift */; };
 		8450F9E26DF792807692491E /* Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C02F4DF23EE0C9FC3FCD425 /* Geometry.swift */; };
@@ -304,6 +305,7 @@
 				99908B1AD88E17E3265E03C2 /* Encoder.swift in Sources */,
 				456B61018428CB3DC04E3701 /* Geometry.swift in Sources */,
 				C1AEE6FB4910D43BD905508D /* Keys.swift in Sources */,
+				6E99809692781FE7E8E51CC7 /* Peers.swift in Sources */,
 				7A2134818F2EA0AC0E1F3E58 /* SharedTests.swift in Sources */,
 				88E2895BC1AB28B8FB4591C0 /* VideoSamples.swift in Sources */,
 				07AC2CF3E668B085510F8F14 /* Wire.swift in Sources */,

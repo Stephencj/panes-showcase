@@ -72,6 +72,7 @@ targets:
       - Tests
       - Shared
       - Agent/Encoder.swift
+      - Agent/Peers.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.stephencjuliano.panes.tests

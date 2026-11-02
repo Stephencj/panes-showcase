@@ -55,7 +55,7 @@ final class Peers {
     private func ownerLogin() -> String? {
         lock.lock(); let known = owner; lock.unlock()
         if let known { return known }
-        guard let json = run([tailscale, "status", "--json", "--peers=false"]),
+        guard let json = run([tailscale, "status", "--json"]),
               let me = json["Self"] as? [String: Any],
               let uid = me["UserID"] as? NSNumber,
               let users = json["User"] as? [String: Any],

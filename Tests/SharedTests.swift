@@ -127,3 +127,19 @@ final class VideoSamplesTests: XCTestCase {
         XCTAssertNotNil(VideoSamples.sample(f.avcc, format: fmt, ptsMicros: f.ptsMicros))
     }
 }
+
+final class PeersTests: XCTestCase {
+    func testOnlyLoopbackAndTailnetAddressesAreCandidates() {
+        XCTAssertTrue(Peers.isLoopback("127.0.0.1"))
+        XCTAssertTrue(Peers.isLoopback("::1"))
+        XCTAssertTrue(Peers.isLoopback("::ffff:127.0.0.1"))
+        XCTAssertTrue(Peers.isTailnet("100.64.0.30"))
+        XCTAssertTrue(Peers.isTailnet("::ffff:100.64.0.10"))
+        XCTAssertTrue(Peers.isTailnet("fd7a:115c:a1e0::1234%utun4"))
+        XCTAssertFalse(Peers.isTailnet("100.128.0.1"), "outside 100.64.0.0/10")
+        XCTAssertFalse(Peers.isTailnet("100.63.0.1"))
+        XCTAssertFalse(Peers.isTailnet("192.168.1.20"), "home Wi-Fi isn't enough")
+        XCTAssertFalse(Peers().allowed("192.168.1.20"))
+        XCTAssertTrue(Peers().allowed("127.0.0.1"))
+    }
+}

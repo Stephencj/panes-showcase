@@ -10,6 +10,7 @@ enum Agent {
     static let lock = NSLock()
 
     static func main() {
+        setvbuf(stdout, nil, _IOLBF, 0)   // launchd log: write each line as it happens
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         // Ask once; macOS remembers the answer for this signed app.
