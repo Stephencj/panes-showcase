@@ -1,0 +1,644 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		03D8122FDB6967641AD4831A /* AgentLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83A1DAD3FB296EB84D35FA0F /* AgentLink.swift */; };
+		07AC2CF3E668B085510F8F14 /* Wire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97341ACCCA8D3BD786C61E8D /* Wire.swift */; };
+		136005F99A63F5EC2CCF1E6B /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00780B11E4EED4EC0C5EC01 /* Session.swift */; };
+		277AE69DE82DF38980C3057F /* PanesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37A9EC06AE75DD4062FFFBFD /* PanesApp.swift */; };
+		29C88887B13CF7E04090EB4E /* Encoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A731BA840E4FB5A78CD9DE6 /* Encoder.swift */; };
+		3406118C88B8F2D0731B24E0 /* Wire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97341ACCCA8D3BD786C61E8D /* Wire.swift */; };
+		35633551F16356CBC5F5F040 /* VideoSamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2386EDDEE0862E84DFA0123E /* VideoSamples.swift */; };
+		456B61018428CB3DC04E3701 /* Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C02F4DF23EE0C9FC3FCD425 /* Geometry.swift */; };
+		48B29E080738A1F80CD8F866 /* VideoSamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2386EDDEE0862E84DFA0123E /* VideoSamples.swift */; };
+		5C3627121D7E37EC021DE2B1 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8E0575BDFD4229FA1CE2407 /* Agent.swift */; };
+		68577474D0F4D888E0375104 /* Wire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97341ACCCA8D3BD786C61E8D /* Wire.swift */; };
+		7A2134818F2EA0AC0E1F3E58 /* SharedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10143F1DAF004874F14762F /* SharedTests.swift */; };
+		803A26E4FCED1648362BDD90 /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5A26CE2262690FF5B2FB1D /* StreamView.swift */; };
+		8450F9E26DF792807692491E /* Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C02F4DF23EE0C9FC3FCD425 /* Geometry.swift */; };
+		88E2895BC1AB28B8FB4591C0 /* VideoSamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2386EDDEE0862E84DFA0123E /* VideoSamples.swift */; };
+		8BF081278A75DCAAC1732524 /* Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C02F4DF23EE0C9FC3FCD425 /* Geometry.swift */; };
+		99908B1AD88E17E3265E03C2 /* Encoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A731BA840E4FB5A78CD9DE6 /* Encoder.swift */; };
+		A26F7DEDF058C3DD3936B13A /* Windows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03EE377F04F3A1E6A0F5221C /* Windows.swift */; };
+		B0660B7D4B596C57528F9184 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFC7279A63EA921FE7F34724 /* main.swift */; };
+		BAEF7110D88A484C98435055 /* Peers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B29ECF9D87FE431CE9AF902 /* Peers.swift */; };
+		C1AEE6FB4910D43BD905508D /* Keys.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8D1229797D17DAA1F040E85 /* Keys.swift */; };
+		C5A6CCD43E6BC2C7C2EBD9CB /* Wire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97341ACCCA8D3BD786C61E8D /* Wire.swift */; };
+		C78879F546B286C599E3CE29 /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7827409F69224E37C327FFBF /* Model.swift */; };
+		CF86829A514F42C3D50645C6 /* Keys.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8D1229797D17DAA1F040E85 /* Keys.swift */; };
+		DE1D809A131054E6BB19DED0 /* VideoSamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2386EDDEE0862E84DFA0123E /* VideoSamples.swift */; };
+		E82B6291539C4B42074DB27F /* Input.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48031D791F28DFE00ABB58F1 /* Input.swift */; };
+		F5B14197C6BC7F373E084E96 /* Keys.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8D1229797D17DAA1F040E85 /* Keys.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		03EE377F04F3A1E6A0F5221C /* Windows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Windows.swift; sourceTree = "<group>"; };
+		1A731BA840E4FB5A78CD9DE6 /* Encoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Encoder.swift; sourceTree = "<group>"; };
+		2386EDDEE0862E84DFA0123E /* VideoSamples.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoSamples.swift; sourceTree = "<group>"; };
+		26FD93FA6B01560462A6E0F6 /* Panes.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Panes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2B29ECF9D87FE431CE9AF902 /* Peers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Peers.swift; sourceTree = "<group>"; };
+		37A9EC06AE75DD4062FFFBFD /* PanesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanesApp.swift; sourceTree = "<group>"; };
+		48031D791F28DFE00ABB58F1 /* Input.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Input.swift; sourceTree = "<group>"; };
+		48E1254021ACB71FD0AC8A2D /* PanesAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PanesAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7827409F69224E37C327FFBF /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
+		8289927C31790B63942935F0 /* PanesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PanesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		83A1DAD3FB296EB84D35FA0F /* AgentLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLink.swift; sourceTree = "<group>"; };
+		97341ACCCA8D3BD786C61E8D /* Wire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Wire.swift; sourceTree = "<group>"; };
+		9C02F4DF23EE0C9FC3FCD425 /* Geometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geometry.swift; sourceTree = "<group>"; };
+		AA5A26CE2262690FF5B2FB1D /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
+		B10143F1DAF004874F14762F /* SharedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTests.swift; sourceTree = "<group>"; };
+		B8D1229797D17DAA1F040E85 /* Keys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keys.swift; sourceTree = "<group>"; };
+		DFC7279A63EA921FE7F34724 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		E8E0575BDFD4229FA1CE2407 /* Agent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent.swift; sourceTree = "<group>"; };
+		F00780B11E4EED4EC0C5EC01 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
+		F0A7B83D44F43A176E50E1F5 /* panes-probe */ = {isa = PBXFileReference; includeInIndex = 0; path = "panes-probe"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		1B2485EEAA7909BF7439E256 /* Probe */ = {
+			isa = PBXGroup;
+			children = (
+				DFC7279A63EA921FE7F34724 /* main.swift */,
+			);
+			path = Probe;
+			sourceTree = "<group>";
+		};
+		1D9401945A74041830E8D538 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				83A1DAD3FB296EB84D35FA0F /* AgentLink.swift */,
+				7827409F69224E37C327FFBF /* Model.swift */,
+				37A9EC06AE75DD4062FFFBFD /* PanesApp.swift */,
+				AA5A26CE2262690FF5B2FB1D /* StreamView.swift */,
+			);
+			path = iOS;
+			sourceTree = "<group>";
+		};
+		39791DF3CCDA736846A88D89 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				B10143F1DAF004874F14762F /* SharedTests.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		5BB3D6B51D7E3C32F94B2018 = {
+			isa = PBXGroup;
+			children = (
+				8981E919082AE4640BD1A959 /* Agent */,
+				1D9401945A74041830E8D538 /* iOS */,
+				1B2485EEAA7909BF7439E256 /* Probe */,
+				846B5C9BD82D4094520594BB /* Shared */,
+				39791DF3CCDA736846A88D89 /* Tests */,
+				9CCCA6401BD75538DC28C2EB /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		846B5C9BD82D4094520594BB /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				9C02F4DF23EE0C9FC3FCD425 /* Geometry.swift */,
+				B8D1229797D17DAA1F040E85 /* Keys.swift */,
+				2386EDDEE0862E84DFA0123E /* VideoSamples.swift */,
+				97341ACCCA8D3BD786C61E8D /* Wire.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		8981E919082AE4640BD1A959 /* Agent */ = {
+			isa = PBXGroup;
+			children = (
+				E8E0575BDFD4229FA1CE2407 /* Agent.swift */,
+				1A731BA840E4FB5A78CD9DE6 /* Encoder.swift */,
+				48031D791F28DFE00ABB58F1 /* Input.swift */,
+				2B29ECF9D87FE431CE9AF902 /* Peers.swift */,
+				F00780B11E4EED4EC0C5EC01 /* Session.swift */,
+				03EE377F04F3A1E6A0F5221C /* Windows.swift */,
+			);
+			path = Agent;
+			sourceTree = "<group>";
+		};
+		9CCCA6401BD75538DC28C2EB /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F0A7B83D44F43A176E50E1F5 /* panes-probe */,
+				26FD93FA6B01560462A6E0F6 /* Panes.app */,
+				48E1254021ACB71FD0AC8A2D /* PanesAgent.app */,
+				8289927C31790B63942935F0 /* PanesTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0D2CF8248C7B20A9E8E66442 /* PanesAgent */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EF33CCE3352AFDED5C70D3A7 /* Build configuration list for PBXNativeTarget "PanesAgent" */;
+			buildPhases = (
+				7FB925CCAF91506C6E767B49 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PanesAgent;
+			packageProductDependencies = (
+			);
+			productName = PanesAgent;
+			productReference = 48E1254021ACB71FD0AC8A2D /* PanesAgent.app */;
+			productType = "com.apple.product-type.application";
+		};
+		2B8B411B30D580FF3336362D /* Panes */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 25F559EE4E33D94E3B7C1C2E /* Build configuration list for PBXNativeTarget "Panes" */;
+			buildPhases = (
+				93682E782B1328B675DAD06F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Panes;
+			packageProductDependencies = (
+			);
+			productName = Panes;
+			productReference = 26FD93FA6B01560462A6E0F6 /* Panes.app */;
+			productType = "com.apple.product-type.application";
+		};
+		4868E4C02EEDD798B8F0EDD0 /* panes-probe */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FC9F8804E80D0C0934EB41A2 /* Build configuration list for PBXNativeTarget "panes-probe" */;
+			buildPhases = (
+				2194128BD18B5D20AA3143C0 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "panes-probe";
+			packageProductDependencies = (
+			);
+			productName = "panes-probe";
+			productReference = F0A7B83D44F43A176E50E1F5 /* panes-probe */;
+			productType = "com.apple.product-type.tool";
+		};
+		682285CC5462AFB8F879EA4E /* PanesTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C4F4ADDFE60510C153E69F0A /* Build configuration list for PBXNativeTarget "PanesTests" */;
+			buildPhases = (
+				AE38EA0FED439C079C5E4E18 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PanesTests;
+			packageProductDependencies = (
+			);
+			productName = PanesTests;
+			productReference = 8289927C31790B63942935F0 /* PanesTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		939794D47DB0299491184FCD /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					0D2CF8248C7B20A9E8E66442 = {
+						DevelopmentTeam = PJV7U329Q6;
+						ProvisioningStyle = Automatic;
+					};
+					2B8B411B30D580FF3336362D = {
+						DevelopmentTeam = PJV7U329Q6;
+						ProvisioningStyle = Automatic;
+					};
+					4868E4C02EEDD798B8F0EDD0 = {
+						DevelopmentTeam = PJV7U329Q6;
+						ProvisioningStyle = Automatic;
+					};
+					682285CC5462AFB8F879EA4E = {
+						DevelopmentTeam = PJV7U329Q6;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 58AB1391142B9F6634181F59 /* Build configuration list for PBXProject "Panes" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 5BB3D6B51D7E3C32F94B2018;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				2B8B411B30D580FF3336362D /* Panes */,
+				0D2CF8248C7B20A9E8E66442 /* PanesAgent */,
+				682285CC5462AFB8F879EA4E /* PanesTests */,
+				4868E4C02EEDD798B8F0EDD0 /* panes-probe */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		2194128BD18B5D20AA3143C0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				35633551F16356CBC5F5F040 /* VideoSamples.swift in Sources */,
+				C5A6CCD43E6BC2C7C2EBD9CB /* Wire.swift in Sources */,
+				B0660B7D4B596C57528F9184 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7FB925CCAF91506C6E767B49 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5C3627121D7E37EC021DE2B1 /* Agent.swift in Sources */,
+				29C88887B13CF7E04090EB4E /* Encoder.swift in Sources */,
+				8450F9E26DF792807692491E /* Geometry.swift in Sources */,
+				E82B6291539C4B42074DB27F /* Input.swift in Sources */,
+				F5B14197C6BC7F373E084E96 /* Keys.swift in Sources */,
+				BAEF7110D88A484C98435055 /* Peers.swift in Sources */,
+				136005F99A63F5EC2CCF1E6B /* Session.swift in Sources */,
+				DE1D809A131054E6BB19DED0 /* VideoSamples.swift in Sources */,
+				A26F7DEDF058C3DD3936B13A /* Windows.swift in Sources */,
+				3406118C88B8F2D0731B24E0 /* Wire.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		93682E782B1328B675DAD06F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				03D8122FDB6967641AD4831A /* AgentLink.swift in Sources */,
+				8BF081278A75DCAAC1732524 /* Geometry.swift in Sources */,
+				CF86829A514F42C3D50645C6 /* Keys.swift in Sources */,
+				C78879F546B286C599E3CE29 /* Model.swift in Sources */,
+				277AE69DE82DF38980C3057F /* PanesApp.swift in Sources */,
+				803A26E4FCED1648362BDD90 /* StreamView.swift in Sources */,
+				48B29E080738A1F80CD8F866 /* VideoSamples.swift in Sources */,
+				68577474D0F4D888E0375104 /* Wire.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AE38EA0FED439C079C5E4E18 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				99908B1AD88E17E3265E03C2 /* Encoder.swift in Sources */,
+				456B61018428CB3DC04E3701 /* Geometry.swift in Sources */,
+				C1AEE6FB4910D43BD905508D /* Keys.swift in Sources */,
+				7A2134818F2EA0AC0E1F3E58 /* SharedTests.swift in Sources */,
+				88E2895BC1AB28B8FB4591C0 /* VideoSamples.swift in Sources */,
+				07AC2CF3E668B085510F8F14 /* Wire.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		0FCE9DD1A7F1B713275A2E44 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.stephencjuliano.panes-probe";
+				PRODUCT_NAME = "panes-probe";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		48A2E0EE5F9C85806E8ADF86 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = PJV7U329Q6;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.10;
+			};
+			name = Release;
+		};
+		86BDB19E16ED76910982655F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Panes Agent";
+				INFOPLIST_KEY_LSUIElement = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stephencjuliano.panes.agent;
+				PRODUCT_NAME = "Panes Agent";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		8D6AE195D7B0C87E1E6786E1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = PJV7U329Q6;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.10;
+			};
+			name = Debug;
+		};
+		A00467794E519709F9809E82 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stephencjuliano.panes.tests;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		A1D4E590E1679C8E0E7B9BC3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_KEY_CFBundleDisplayName = Panes;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Panes connects to your Mac on the home network when Tailscale isn't available.";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stephencjuliano.panes;
+				PRODUCT_NAME = Panes;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E53B4F4DA7FBD4A35DB836CA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.stephencjuliano.panes-probe";
+				PRODUCT_NAME = "panes-probe";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		EAD57A3AC430EFB221D516EB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stephencjuliano.panes.tests;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		EF830A34F4F6E6A10FE5FF19 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_KEY_CFBundleDisplayName = Panes;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Panes connects to your Mac on the home network when Tailscale isn't available.";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stephencjuliano.panes;
+				PRODUCT_NAME = Panes;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		F9289597155A6CD2FEF32814 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Panes Agent";
+				INFOPLIST_KEY_LSUIElement = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stephencjuliano.panes.agent;
+				PRODUCT_NAME = "Panes Agent";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		25F559EE4E33D94E3B7C1C2E /* Build configuration list for PBXNativeTarget "Panes" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1D4E590E1679C8E0E7B9BC3 /* Debug */,
+				EF830A34F4F6E6A10FE5FF19 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		58AB1391142B9F6634181F59 /* Build configuration list for PBXProject "Panes" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8D6AE195D7B0C87E1E6786E1 /* Debug */,
+				48A2E0EE5F9C85806E8ADF86 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C4F4ADDFE60510C153E69F0A /* Build configuration list for PBXNativeTarget "PanesTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00467794E519709F9809E82 /* Debug */,
+				EAD57A3AC430EFB221D516EB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		EF33CCE3352AFDED5C70D3A7 /* Build configuration list for PBXNativeTarget "PanesAgent" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				86BDB19E16ED76910982655F /* Debug */,
+				F9289597155A6CD2FEF32814 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FC9F8804E80D0C0934EB41A2 /* Build configuration list for PBXNativeTarget "panes-probe" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E53B4F4DA7FBD4A35DB836CA /* Debug */,
+				0FCE9DD1A7F1B713275A2E44 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 939794D47DB0299491184FCD /* Project object */;
+}

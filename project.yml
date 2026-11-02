@@ -1,0 +1,90 @@
+# XcodeGen spec for Panes: app windows from your machines, in tabs on the phone.
+#   cd ~/Documents/panes && xcodegen
+name: Panes
+options:
+  bundleIdPrefix: com.stephencjuliano
+  developmentLanguage: en
+  createIntermediateGroups: true
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.10"
+    DEVELOPMENT_TEAM: "PJV7U329Q6"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    SWIFT_STRICT_CONCURRENCY: minimal
+    GENERATE_INFOPLIST_FILE: YES
+
+targets:
+  # The phone app.
+  Panes:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources: [Shared, iOS]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stephencjuliano.panes
+        PRODUCT_NAME: Panes
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_KEY_CFBundleDisplayName: Panes
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Panes connects to your Mac on the home network when Tailscale isn't available."
+
+  # Runs on each Mac (launchd, at login) and streams its windows.
+  PanesAgent:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources: [Shared, Agent]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stephencjuliano.panes.agent
+        PRODUCT_NAME: Panes Agent
+        INFOPLIST_KEY_LSUIElement: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Panes Agent
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_IDENTITY: "Apple Development"
+
+  # End-to-end check of a running agent: panes-probe --title TEXT
+  panes-probe:
+    type: tool
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - Probe
+      - Shared/Wire.swift
+      - Shared/VideoSamples.swift
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_NAME: panes-probe
+
+  PanesTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - Tests
+      - Shared
+      - Agent/Encoder.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stephencjuliano.panes.tests
+
+schemes:
+  Panes:
+    build:
+      targets:
+        Panes: all
+  PanesAgent:
+    build:
+      targets:
+        PanesAgent: all
+        panes-probe: all
+    test:
+      targets: [PanesTests]
