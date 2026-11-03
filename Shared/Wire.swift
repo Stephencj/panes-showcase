@@ -104,7 +104,7 @@ struct FrameReader {
 
 /// Every JSON message. `op` says which fields matter:
 ///
-/// phone → agent: hello, list, open(windowID, viewport), input(event),
+/// phone → agent: hello, list, open(windowID, viewport, zoom), input(event),
 ///                keyframe, pause, resume
 /// agent → phone: hello(machine), windows(windows), opened(windowID, title,
 ///                app, width, height), resized(width, height), closed, error
@@ -115,6 +115,8 @@ struct Control: Codable, Equatable {
     var windows: [WindowInfo]? = nil
     var windowID: UInt32? = nil
     var viewport: Size? = nil
+    /// Window points per phone point when fitting (bigger = more fits, smaller text).
+    var zoom: Double? = nil
     var title: String? = nil
     var app: String? = nil
     var width: Double? = nil

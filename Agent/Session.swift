@@ -19,6 +19,7 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
     private var lastPixels: CVPixelBuffer?
     private var lastSize: CGSize = .zero
     private var originalFrame: CGRect?
+    private var usingVirtual = false
     private var paused = false
     private var wantKeyframe = true
     private var watch: DispatchSourceTimer?
@@ -79,7 +80,7 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
             }
         case "open":
             guard let id = msg.windowID else { return }
-            Task { await open(id, viewport: msg.viewport) }
+            Task { await open(id, viewport: msg.viewport, zoom: msg.zoom) }
         case "input":
             if let event = msg.event, let id = windowID { input.handle(event, window: id) }
         case "keyframe":
@@ -96,25 +97,30 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
 
     // MARK: capture
 
-    private func open(_ id: UInt32, viewport: Size?) async {
+    private func open(_ id: UInt32, viewport: Size?, zoom: Double?) async {
         let t0 = Date()
-        guard let window = try? await Windows.scWindow(id), let frame = Windows.frame(id) else {
+        guard var window = try? await Windows.scWindow(id), let frame = Windows.frame(id) else {
             send(Control(op: "error", error: "That window is gone."))
             return
         }
         await withCheckedContinuation { c in queue.async { self.stopCapture(); c.resume() } }
         if let viewport {
-            let area = Windows.visibleArea(for: frame)
-            let size = Geometry.fit(viewport: CGSize(width: viewport.width, height: viewport.height), in: area)
+            // Fitted windows go onto the Retina virtual display when there is
+            // one, so they stream at 2x; otherwise they're fitted where they are.
+            let virtual = VirtualDisplay.shared.acquire()
+            queue.sync { originalFrame = frame; usingVirtual = virtual != nil }
+            let area = virtual ?? Windows.visibleArea(for: frame)
+            let size = Geometry.fit(viewport: CGSize(width: viewport.width, height: viewport.height),
+                                    zoom: CGFloat(zoom ?? Geometry.defaultZoom), in: area)
             let target = CGRect(x: area.midX - size.width / 2, y: area.minY, width: size.width, height: size.height)
-            queue.sync { originalFrame = frame }
             Windows.setFrame(id, target)
-            // The window server applies the new size a moment later; wait for
-            // it so the stream starts at the window's real shape.
+            // The window server applies the new frame a moment later; wait for
+            // it so the stream starts at the window's real shape and scale.
             for _ in 0..<20 {
-                if let f = Windows.frame(id), f.size != frame.size { break }
+                if let f = Windows.frame(id), f != frame { break }
                 try? await Task.sleep(for: .milliseconds(25))
             }
+            if virtual != nil, let moved = try? await Windows.scWindow(id) { window = moved }
         }
         let now = Windows.frame(id) ?? frame
         print("open \(id): window ready after \(Int(Date().timeIntervalSince(t0) * 1000)) ms")
@@ -233,6 +239,8 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
             input.releaseAll(window: id)
             if let original = originalFrame { Windows.setFrame(id, original) }
         }
+        if usingVirtual { VirtualDisplay.shared.release() }
+        usingVirtual = false
         originalFrame = nil
         windowID = nil
     }

@@ -47,6 +47,7 @@ targets:
         PRODUCT_NAME: Panes Agent
         INFOPLIST_KEY_LSUIElement: YES
         INFOPLIST_KEY_CFBundleDisplayName: Panes Agent
+        SWIFT_OBJC_BRIDGING_HEADER: Agent/Agent-Bridging-Header.h
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_IDENTITY: "Apple Development"
 

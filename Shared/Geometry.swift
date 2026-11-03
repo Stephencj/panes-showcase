@@ -1,22 +1,23 @@
 import CoreGraphics
 
 enum Geometry {
-    /// The biggest window with the phone's shape that fits on the Mac's screen,
-    /// so the stream fills the phone instead of shrinking the window into a
-    /// letterbox. `minWidth` keeps it from collapsing into an unusable sliver;
-    /// apps clamp to their own minimum size on top of this.
-    static func fit(viewport: CGSize, in screen: CGRect, minWidth: CGFloat = 480) -> CGSize {
+    /// How many Mac points a phone point shows when fitting. 1.4 keeps Mac
+    /// text readable on the phone while fitting a useful amount of an app.
+    static let defaultZoom: CGFloat = 1.4
+
+    /// A window with the phone's shape, `zoom` times the phone's size, shrunk
+    /// if needed to fit the screen area. `minWidth` keeps it from collapsing
+    /// into an unusable sliver; apps clamp to their own minimum size on top.
+    static func fit(viewport: CGSize, zoom: CGFloat = defaultZoom, in screen: CGRect,
+                    minWidth: CGFloat = 480) -> CGSize {
         guard viewport.width > 0, viewport.height > 0, screen.width > 0, screen.height > 0 else {
             return screen.size
         }
         let aspect = viewport.width / viewport.height
-        var size = CGSize(width: screen.height * aspect, height: screen.height)
-        if size.width > screen.width {
-            size = CGSize(width: screen.width, height: screen.width / aspect)
-        }
-        if size.width < minWidth {
-            size = CGSize(width: min(minWidth, screen.width), height: min(minWidth / aspect, screen.height))
-        }
+        var size = CGSize(width: viewport.width * zoom, height: viewport.height * zoom)
+        if size.width < minWidth { size = CGSize(width: minWidth, height: minWidth / aspect) }
+        if size.width > screen.width { size = CGSize(width: screen.width, height: screen.width / aspect) }
+        if size.height > screen.height { size = CGSize(width: screen.height * aspect, height: screen.height) }
         return CGSize(width: size.width.rounded(), height: size.height.rounded())
     }
 

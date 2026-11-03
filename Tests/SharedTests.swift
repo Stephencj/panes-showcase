@@ -50,23 +50,25 @@ final class WireTests: XCTestCase {
 final class GeometryTests: XCTestCase {
     let screen = CGRect(x: 0, y: 25, width: 1920, height: 1030)
 
-    func testPortraitPhoneFitsScreenHeight() {
-        let s = Geometry.fit(viewport: CGSize(width: 393, height: 760), in: screen)
-        XCTAssertEqual(s.height, 1030)
-        XCTAssertEqual(s.width, (1030 * 393 / 760).rounded())
+    func testFitIsZoomTimesThePhone() {
+        let big = CGRect(x: 3000, y: 0, width: 1600, height: 1200)
+        let s = Geometry.fit(viewport: CGSize(width: 393, height: 700), zoom: 1.4, in: big)
+        XCTAssertEqual(s, CGSize(width: 550, height: 980))
     }
 
-    func testLandscapePhoneFitsScreenWidth() {
-        let s = Geometry.fit(viewport: CGSize(width: 852, height: 393), in: screen)
-        XCTAssertLessThanOrEqual(s.width, 1920)
-        XCTAssertLessThanOrEqual(s.height, 1030)
-        XCTAssertEqual(s.width / s.height, 852 / 393, accuracy: 0.01)
+    func testFitShrinksToTheScreenKeepingShape() {
+        let s = Geometry.fit(viewport: CGSize(width: 393, height: 760), zoom: 1.4, in: screen)
+        XCTAssertEqual(s.height, 1030)
+        XCTAssertEqual(s.width / s.height, 393 / 760, accuracy: 0.01)
+        let wide = Geometry.fit(viewport: CGSize(width: 852, height: 393), zoom: 3, in: screen)
+        XCTAssertLessThanOrEqual(wide.width, 1920)
+        XCTAssertLessThanOrEqual(wide.height, 1030)
+        XCTAssertEqual(wide.width / wide.height, 852 / 393, accuracy: 0.01)
     }
 
     func testNarrowShapesKeepAUsableWidth() {
-        let s = Geometry.fit(viewport: CGSize(width: 100, height: 2000), in: screen)
-        XCTAssertEqual(s.width, 480)
-        XCTAssertLessThanOrEqual(s.height, 1030)
+        let s = Geometry.fit(viewport: CGSize(width: 200, height: 300), zoom: 1, in: screen)
+        XCTAssertEqual(s, CGSize(width: 480, height: 720))
     }
 
     func testAspectFitCentersAndMapsTouches() {
