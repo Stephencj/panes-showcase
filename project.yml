@@ -36,6 +36,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.stephencjuliano.panes
         PRODUCT_NAME: Panes
+        INFOPLIST_FILE: Support/Panes-Info.plist
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_KEY_CFBundleDisplayName: Panes
         INFOPLIST_KEY_UILaunchScreen_Generation: YES

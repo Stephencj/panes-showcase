@@ -11,6 +11,7 @@
 		03D8122FDB6967641AD4831A /* AgentLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83A1DAD3FB296EB84D35FA0F /* AgentLink.swift */; };
 		07AC2CF3E668B085510F8F14 /* Wire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97341ACCCA8D3BD786C61E8D /* Wire.swift */; };
 		136005F99A63F5EC2CCF1E6B /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00780B11E4EED4EC0C5EC01 /* Session.swift */; };
+		1E1CD5BAAD46BEA87964AFB4 /* AppSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BF4613CA07AF8A946E53EFD /* AppSurface.swift */; };
 		277AE69DE82DF38980C3057F /* PanesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37A9EC06AE75DD4062FFFBFD /* PanesApp.swift */; };
 		29C88887B13CF7E04090EB4E /* Encoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A731BA840E4FB5A78CD9DE6 /* Encoder.swift */; };
 		3406118C88B8F2D0731B24E0 /* Wire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97341ACCCA8D3BD786C61E8D /* Wire.swift */; };
@@ -45,6 +46,7 @@
 		0359963F240EF91532A73D45 /* VirtualDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualDisplay.swift; sourceTree = "<group>"; };
 		03EE377F04F3A1E6A0F5221C /* Windows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Windows.swift; sourceTree = "<group>"; };
 		1A731BA840E4FB5A78CD9DE6 /* Encoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Encoder.swift; sourceTree = "<group>"; };
+		1BF4613CA07AF8A946E53EFD /* AppSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSurface.swift; sourceTree = "<group>"; };
 		2386EDDEE0862E84DFA0123E /* VideoSamples.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoSamples.swift; sourceTree = "<group>"; };
 		26FD93FA6B01560462A6E0F6 /* Panes.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Panes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2B29ECF9D87FE431CE9AF902 /* Peers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Peers.swift; sourceTree = "<group>"; };
@@ -92,6 +94,7 @@
 			isa = PBXGroup;
 			children = (
 				83A1DAD3FB296EB84D35FA0F /* AgentLink.swift */,
+				1BF4613CA07AF8A946E53EFD /* AppSurface.swift */,
 				7827409F69224E37C327FFBF /* Model.swift */,
 				37A9EC06AE75DD4062FFFBFD /* PanesApp.swift */,
 				AA5A26CE2262690FF5B2FB1D /* StreamView.swift */,
@@ -318,6 +321,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				03D8122FDB6967641AD4831A /* AgentLink.swift in Sources */,
+				1E1CD5BAAD46BEA87964AFB4 /* AppSurface.swift in Sources */,
 				8BF081278A75DCAAC1732524 /* Geometry.swift in Sources */,
 				CF86829A514F42C3D50645C6 /* Keys.swift in Sources */,
 				C78879F546B286C599E3CE29 /* Model.swift in Sources */,
@@ -533,6 +537,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = "Support/Panes-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Panes;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Panes connects to your Mac on the home network when Tailscale isn't available.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -587,6 +592,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = "Support/Panes-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Panes;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Panes connects to your Mac on the home network when Tailscale isn't available.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

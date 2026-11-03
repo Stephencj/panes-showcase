@@ -155,6 +155,13 @@ final class TerminalWireTests: XCTestCase {
         XCTAssertEqual(Wire.sessionName("é'\""), "panes")
     }
 
+    func testOnlyPanesSessionsCanBeEnded() {
+        XCTAssertTrue(Wire.isPanesSession("panes-1a2b3c"))
+        XCTAssertFalse(Wire.isPanesSession("work"))
+        XCTAssertFalse(Wire.isPanesSession("panes-"))
+        XCTAssertFalse(Wire.isPanesSession("mypanes-x"))
+    }
+
     func testTerminalBytesRoundTrip() throws {
         var reader = FrameReader()
         let frames = try reader.push(Wire.encode(.terminal, Data("ls -la\r".utf8)))

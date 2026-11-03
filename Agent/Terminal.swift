@@ -93,6 +93,19 @@ final class Terminal {
         reader?.cancel()
     }
 
+    /// Ends a tmux session by name (exact match), if tmux is installed.
+    static func killSession(_ name: String) {
+        guard let tmux = ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux", "/usr/bin/tmux"]
+            .first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { return }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: tmux)
+        p.arguments = ["kill-session", "-t", "=\(name)"]
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        try? p.run()
+        p.waitUntilExit()
+    }
+
     static func loginShell() -> String {
         if let pw = getpwuid(getuid()), let sh = pw.pointee.pw_shell {
             let s = String(cString: sh)

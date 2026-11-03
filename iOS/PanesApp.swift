@@ -18,7 +18,8 @@ struct PanesApp: App {
     }
 
     /// For tests: PANES_OPEN="<title text>" opens that window on the first machine
-    /// at launch; PANES_TERMINAL=<command> opens a terminal there and types the command.
+    /// at launch; PANES_TERMINAL=<command> opens a terminal there and types the command;
+    /// PANES_APP=<name> launches that Linux app.
     private func autoOpen() {
         let env = ProcessInfo.processInfo.environment
         let machine = Machine.defaults[0]
@@ -27,6 +28,18 @@ struct PanesApp: App {
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(2))
                 store.current?.sendTerminal(Data((command + "\r").utf8))
+            }
+            return
+        }
+        if let appName = env["PANES_APP"], store.tabs.isEmpty {
+            // PANES_APP="<app name>": launch that Linux app from the first machine.
+            let list = WindowList()
+            list.load(machine)
+            Task { @MainActor in
+                for _ in 0..<50 where list.loading { try? await Task.sleep(for: .milliseconds(200)) }
+                if let a = list.apps.first(where: { $0.name.localizedCaseInsensitiveContains(appName) }) {
+                    store.openApp(a, on: machine)
+                }
             }
             return
         }
@@ -73,6 +86,9 @@ struct ContentView: View {
             }, openTerminal: { machine in
                 picking = false
                 store.openTerminal(on: machine)
+            }, openApp: { app, machine in
+                picking = false
+                store.openApp(app, on: machine)
             })
         }
     }
@@ -152,6 +168,8 @@ struct TabScreen: View {
         ZStack(alignment: .top) {
             if case .terminal = tab.kind {
                 TerminalSurface(tab: tab, keyboard: $keyboard)
+            } else if case .app = tab.kind {
+                AppSurface(tab: tab)
             } else {
                 StreamSurface(tab: tab, keyboard: $keyboard)
                     .ignoresSafeArea(.keyboard)
@@ -184,6 +202,7 @@ struct PickerView: View {
     let viewport: CGSize
     let open: (WindowInfo, Machine, Bool) -> Void
     let openTerminal: (Machine) -> Void
+    let openApp: (AppInfo, Machine) -> Void
     @State private var machine = Machine.defaults[0]
     @State private var fit = true
     @StateObject private var list = WindowList()
@@ -217,6 +236,17 @@ struct PickerView: View {
                 }
                 if let problem = list.problem {
                     Text(problem).foregroundStyle(.orange)
+                }
+                if !list.apps.isEmpty {
+                    Section {
+                        ForEach(list.apps) { app in
+                            Button(app.name) { openApp(app, machine) }
+                        }
+                    } header: {
+                        Text("Apps")
+                    } footer: {
+                        Text("Each app runs in its own session on \(machine.name) and keeps running when you leave.")
+                    }
                 }
                 ForEach(groups, id: \.0) { app, windows in
                     Section(app) {
