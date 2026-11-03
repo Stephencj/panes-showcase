@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Mac mini",
+    "hosts": ["my-mac-mini", "100.64.0.10", "192.168.1.10"],
+    "web": "https://my-mac-mini.tailnet-example.ts.net:7443"
+  },
+  {
+    "name": "linux-box",
+    "hosts": ["linux-box", "100.64.0.20"],
+    "web": "https://linux-box.tailnet-example.ts.net:7443"
+  }
+]
