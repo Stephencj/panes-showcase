@@ -1,0 +1,11 @@
+[Unit]
+Description=Panes agent (terminal tabs and app windows for the Panes phone app)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 %h/.local/share/panes/panes_agent.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
