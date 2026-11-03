@@ -14,10 +14,15 @@ import VideoToolbox
 var args = CommandLine.arguments.dropFirst()
 var opts: [String: String] = [:]
 while let key = args.popFirst() { if key.hasPrefix("--") { opts[String(key.dropFirst(2))] = args.popFirst() ?? "" } }
-guard let titleNeedle = opts["title"] else {
-    print("usage: panes-probe --title TEXT [--host H] [--fit WxH] [--type TEXT] [--png PATH]")
+let terminalMode = opts["terminal"] != nil
+guard let titleNeedle = opts["title"] ?? (terminalMode ? "" : nil) else {
+    print("usage: panes-probe --title TEXT [--host H] [--port P] [--fit WxH] [--type TEXT] [--png PATH]")
+    print("       panes-probe --terminal NAME [--host H] [--port P]   (runs a command in a terminal tab)")
     exit(2)
 }
+var terminalOutput = ""
+// The shell has to compute this, so seeing it proves a real shell ran the line.
+let marker = "PANES_" + "42"
 
 let host = opts["host"] ?? "127.0.0.1"
 var summary: [String: Any] = ["host": host]
@@ -42,7 +47,8 @@ func finish(_ ok: Bool, _ note: String? = nil) {
     exit(ok ? 0 : 1)
 }
 
-let conn = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: Wire.port)!, using: .tcp)
+let port = opts["port"].flatMap(UInt16.init) ?? Wire.port
+let conn = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
 func send(_ c: Control) { conn.send(content: Wire.encode(c), completion: .idempotent) }
 
 func decode(_ sample: CMSampleBuffer) {
@@ -101,7 +107,18 @@ func handle(_ frame: Frame) {
         switch msg.op {
         case "hello":
             summary["machine"] = msg.machine
-            send(Control(op: "list"))
+            summary["features"] = msg.features
+            if terminalMode {
+                send(Control(op: "terminal", name: opts["terminal"], cols: 100, rows: 30))
+            } else {
+                send(Control(op: "list"))
+            }
+        case "terminalOpened":
+            summary["session"] = msg.name
+            conn.send(content: Wire.encode(.terminal, Data("echo PANES_$((6*7))\r".utf8)), completion: .idempotent)
+        case "exited":
+            summary["exited"] = true
+            finish(terminalOutput.contains(marker), terminalOutput.contains(marker) ? nil : "shell exited early")
         case "windows":
             let windows = msg.windows ?? []
             summary["windowCount"] = windows.count
@@ -122,6 +139,14 @@ func handle(_ frame: Frame) {
             if msg.error?.contains("System Settings") != true { finish(false, msg.error) }
         default:
             break
+        }
+    case .terminal:
+        terminalOutput += String(decoding: frame.payload, as: UTF8.self)
+        if terminalOutput.contains(marker), summary["firstOutputMs"] == nil {
+            summary["firstOutputMs"] = Int(Date().timeIntervalSince(started) * 1000)
+            summary["sawMarker"] = true
+            // Leave nothing behind: exit ends the tmux session too.
+            conn.send(content: Wire.encode(.terminal, Data("exit\r".utf8)), completion: .idempotent)
         }
     case .videoFormat:
         if let sets = Wire.parseVideoFormat(frame.payload), let f = VideoSamples.format(sets) {

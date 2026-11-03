@@ -17,10 +17,20 @@ struct PanesApp: App {
         }
     }
 
-    /// For tests: PANES_OPEN="<title text>" opens that window on the first machine at launch.
+    /// For tests: PANES_OPEN="<title text>" opens that window on the first machine
+    /// at launch; PANES_TERMINAL=<command> opens a terminal there and types the command.
     private func autoOpen() {
-        guard let needle = ProcessInfo.processInfo.environment["PANES_OPEN"], store.tabs.isEmpty else { return }
+        let env = ProcessInfo.processInfo.environment
         let machine = Machine.defaults[0]
+        if let command = env["PANES_TERMINAL"], store.tabs.isEmpty {
+            store.openTerminal(on: machine)
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                store.current?.sendTerminal(Data((command + "\r").utf8))
+            }
+            return
+        }
+        guard let needle = env["PANES_OPEN"], store.tabs.isEmpty else { return }
         let list = WindowList()
         list.load(machine)
         Task { @MainActor in
@@ -57,10 +67,13 @@ struct ContentView: View {
         }
         .background(Color.black)
         .sheet(isPresented: $picking) {
-            PickerView(viewport: viewport) { window, machine, fit in
+            PickerView(viewport: viewport, open: { window, machine, fit in
                 picking = false
                 store.open(window, on: machine, fit: fit, viewport: viewport)
-            }
+            }, openTerminal: { machine in
+                picking = false
+                store.openTerminal(on: machine)
+            })
         }
     }
 
@@ -108,12 +121,12 @@ struct TabChip: View {
         HStack(spacing: 6) {
             Circle().fill(dot).frame(width: 7, height: 7)
             VStack(alignment: .leading, spacing: 0) {
-                Text(tab.window.app).font(.caption.weight(.semibold)).lineLimit(1)
+                Text(tab.appName).font(.caption.weight(.semibold)).lineLimit(1)
                 Text(tab.machine.name).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
             Button(action: close) { Image(systemName: "xmark").font(.caption2.weight(.bold)) }
                 .foregroundStyle(.secondary)
-                .accessibilityLabel("Close \(tab.window.app)")
+                .accessibilityLabel("Close \(tab.appName)")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
@@ -137,8 +150,12 @@ struct TabScreen: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            StreamSurface(tab: tab, keyboard: $keyboard)
-                .ignoresSafeArea(.keyboard)
+            if case .terminal = tab.kind {
+                TerminalSurface(tab: tab, keyboard: $keyboard)
+            } else {
+                StreamSurface(tab: tab, keyboard: $keyboard)
+                    .ignoresSafeArea(.keyboard)
+            }
             switch tab.status {
             case .connecting:
                 ProgressView("Connecting to \(tab.machine.name)…").padding().background(.thinMaterial, in: .rect(cornerRadius: 12))
@@ -166,6 +183,7 @@ struct TabScreen: View {
 struct PickerView: View {
     let viewport: CGSize
     let open: (WindowInfo, Machine, Bool) -> Void
+    let openTerminal: (Machine) -> Void
     @State private var machine = Machine.defaults[0]
     @State private var fit = true
     @StateObject private var list = WindowList()
@@ -177,9 +195,22 @@ struct PickerView: View {
                     Picker("Machine", selection: $machine) {
                         ForEach(Machine.defaults) { Text($0.name).tag($0) }
                     }
-                    Toggle("Fit window to phone", isOn: $fit)
+                    if list.features.contains("windows") {
+                        Toggle("Fit window to phone", isOn: $fit)
+                    }
                 } footer: {
-                    Text("Fitting resizes the window on the Mac to the phone's shape while the tab is open, and puts it back when you close the tab.")
+                    if list.features.contains("windows") {
+                        Text("Fitting resizes the window on the Mac to the phone's shape while the tab is open, and puts it back when you close the tab.")
+                    }
+                }
+                if list.features.contains("terminal") {
+                    Section {
+                        Button { openTerminal(machine) } label: {
+                            Label("New terminal", systemImage: "terminal")
+                        }
+                    } footer: {
+                        Text("Runs in tmux on \(machine.name), so it keeps going when you leave the app.")
+                    }
                 }
                 if list.loading {
                     HStack { ProgressView(); Text("Asking \(machine.name) for its windows…").foregroundStyle(.secondary) }

@@ -9,6 +9,7 @@ final class AgentLink {
         case control(Control)
         case format([Data])
         case frame(keyframe: Bool, ptsMicros: UInt64, avcc: Data)
+        case terminal(Data)
         case failed(String)
     }
 
@@ -29,6 +30,11 @@ final class AgentLink {
 
     func send(_ msg: Control) {
         let data = Wire.encode(msg)
+        queue.async { self.conn?.send(content: data, completion: .idempotent) }
+    }
+
+    func sendRaw(_ type: FrameType, _ payload: Data) {
+        let data = Wire.encode(type, payload)
         queue.async { self.conn?.send(content: data, completion: .idempotent) }
     }
 
@@ -101,6 +107,8 @@ final class AgentLink {
             if let sets = Wire.parseVideoFormat(f.payload) { emit(.format(sets)) }
         case .videoFrame:
             if let v = Wire.parseVideoFrame(f.payload) { emit(.frame(keyframe: v.keyframe, ptsMicros: v.ptsMicros, avcc: v.avcc)) }
+        case .terminal:
+            emit(.terminal(f.payload))
         }
     }
 

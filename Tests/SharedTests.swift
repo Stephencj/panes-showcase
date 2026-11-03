@@ -145,3 +145,19 @@ final class PeersTests: XCTestCase {
         XCTAssertTrue(Peers().allowed("127.0.0.1"))
     }
 }
+
+final class TerminalWireTests: XCTestCase {
+    func testSessionNamesAreSanitized() {
+        XCTAssertEqual(Wire.sessionName("panes-1A_b"), "panes-1A_b")
+        XCTAssertEqual(Wire.sessionName("x; rm -rf ~"), "xrm-rf")
+        XCTAssertEqual(Wire.sessionName("$(reboot)"), "reboot")
+        XCTAssertEqual(Wire.sessionName(nil), "panes")
+        XCTAssertEqual(Wire.sessionName("é'\""), "panes")
+    }
+
+    func testTerminalBytesRoundTrip() throws {
+        var reader = FrameReader()
+        let frames = try reader.push(Wire.encode(.terminal, Data("ls -la\r".utf8)))
+        XCTAssertEqual(frames, [Frame(type: .terminal, payload: Data("ls -la\r".utf8))])
+    }
+}

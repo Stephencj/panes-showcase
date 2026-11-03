@@ -17,6 +17,12 @@ settings:
     SWIFT_STRICT_CONCURRENCY: minimal
     GENERATE_INFOPLIST_FILE: YES
 
+packages:
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm
+    # 1.19+ adds a build plugin that needs approving in Xcode; 1.18 has none.
+    exactVersion: 1.18.0
+
 targets:
   # The phone app.
   Panes:
@@ -24,6 +30,8 @@ targets:
     platform: iOS
     deploymentTarget: "17.0"
     sources: [Shared, iOS]
+    dependencies:
+      - package: SwiftTerm
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.stephencjuliano.panes

@@ -10,10 +10,12 @@ import Foundation
 ///   whenever the stream size changes. `[count: u8]` then `[len: u16][bytes]` each.
 /// - videoFrame: `[flags: u8][pts: u64 microseconds][AVCC data]`, where flags
 ///   bit 0 marks a keyframe and AVCC data is 4-byte-length-prefixed NAL units.
+/// - terminal: raw terminal bytes, either direction (keys in, screen output out).
 enum FrameType: UInt8 {
     case control = 1
     case videoFormat = 2
     case videoFrame = 3
+    case terminal = 4
 }
 
 struct Frame: Equatable {
@@ -105,9 +107,10 @@ struct FrameReader {
 /// Every JSON message. `op` says which fields matter:
 ///
 /// phone → agent: hello, list, open(windowID, viewport, zoom), input(event),
-///                keyframe, pause, resume
-/// agent → phone: hello(machine), windows(windows), opened(windowID, title,
-///                app, width, height), resized(width, height), closed, error
+///                keyframe, pause, resume, terminal(name, cols, rows), resize(cols, rows)
+/// agent → phone: hello(machine, features), windows(windows), opened(windowID,
+///                title, app, width, height), resized(width, height), closed,
+///                terminalOpened(name), exited, error
 struct Control: Codable, Equatable {
     var op: String
     var version: Int? = nil
@@ -123,6 +126,22 @@ struct Control: Codable, Equatable {
     var height: Double? = nil
     var event: InputEvent? = nil
     var error: String? = nil
+    /// What a machine's agent can do: "windows", "terminal".
+    var features: [String]? = nil
+    /// Terminal tabs: the tmux session to attach (created if missing), and the size in cells.
+    var name: String? = nil
+    var cols: Int? = nil
+    var rows: Int? = nil
+}
+
+extension Wire {
+    /// tmux session names from the phone are limited to letters, digits, - and _.
+    static func sessionName(_ raw: String?) -> String {
+        let cleaned = String((raw ?? "").unicodeScalars.filter {
+            CharacterSet.alphanumerics.contains($0) && $0.isASCII || $0 == "-" || $0 == "_"
+        }.prefix(40))
+        return cleaned.isEmpty ? "panes" : cleaned
+    }
 }
 
 struct Size: Codable, Equatable {

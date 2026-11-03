@@ -24,6 +24,7 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
     private var wantKeyframe = true
     private var watch: DispatchSourceTimer?
     private var ended = false
+    private var terminal: Terminal?
 
     /// Bytes handed to the socket but not yet sent. Past the limit the phone's
     /// connection can't keep up, so frames are skipped rather than queued
@@ -55,8 +56,15 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
             guard let self else { return }
             if let data, !data.isEmpty {
                 do {
-                    for frame in try self.reader.push(data) where frame.type == .control {
-                        if let msg = try? JSONDecoder().decode(Control.self, from: frame.payload) { self.handle(msg) }
+                    for frame in try self.reader.push(data) {
+                        switch frame.type {
+                        case .control:
+                            if let msg = try? JSONDecoder().decode(Control.self, from: frame.payload) { self.handle(msg) }
+                        case .terminal:
+                            self.terminal?.write(frame.payload)
+                        default:
+                            break
+                        }
                     }
                 } catch {
                     print("bad stream: \(error)")
@@ -71,7 +79,8 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
     private func handle(_ msg: Control) {
         switch msg.op {
         case "hello":
-            send(Control(op: "hello", version: Wire.version, machine: Host.current().localizedName ?? "Mac"))
+            send(Control(op: "hello", version: Wire.version, machine: Host.current().localizedName ?? "Mac",
+                         features: ["windows", "terminal"]))
             if let problem = Agent.permissionProblem() { send(Control(op: "error", error: problem)) }
         case "list":
             Task {
@@ -83,6 +92,10 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
             Task { await open(id, viewport: msg.viewport, zoom: msg.zoom) }
         case "input":
             if let event = msg.event, let id = windowID { input.handle(event, window: id) }
+        case "terminal":
+            openTerminal(msg)
+        case "resize":
+            terminal?.resize(cols: msg.cols ?? 80, rows: msg.rows ?? 24)
         case "keyframe":
             requestKeyframe()
         case "pause":
@@ -93,6 +106,21 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
         default:
             break
         }
+    }
+
+    // MARK: terminal
+
+    private func openTerminal(_ msg: Control) {
+        terminal?.close()
+        let name = Wire.sessionName(msg.name)
+        terminal = Terminal(name: name, cols: msg.cols ?? 80, rows: msg.rows ?? 24, queue: queue,
+                            onOutput: { [weak self] data in self?.sendRaw(Wire.encode(.terminal, data)) },
+                            onExit: { [weak self] in
+                                self?.terminal = nil
+                                self?.send(Control(op: "exited"))
+                            })
+        if terminal == nil { send(Control(op: "error", error: "Couldn't start a shell.")) }
+        else { send(Control(op: "terminalOpened", name: name)) }
     }
 
     // MARK: capture
@@ -249,6 +277,8 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
         guard !ended else { return }
         ended = true
         stopCapture()
+        terminal?.close()
+        terminal = nil
         conn.cancel()
         onEnd(self)
     }
