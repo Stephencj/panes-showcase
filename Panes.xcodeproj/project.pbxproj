@@ -10,6 +10,7 @@
 		00BFC21FDC0F989F617028C4 /* Terminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3B92B1AF66F689BAD9161C1 /* Terminal.swift */; };
 		03D8122FDB6967641AD4831A /* AgentLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83A1DAD3FB296EB84D35FA0F /* AgentLink.swift */; };
 		07AC2CF3E668B085510F8F14 /* Wire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97341ACCCA8D3BD786C61E8D /* Wire.swift */; };
+		1054E44EB6CA4352DCE4BCE9 /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1AB97DBF99D0F7C1FC02A07 /* AudioPlayer.swift */; };
 		136005F99A63F5EC2CCF1E6B /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00780B11E4EED4EC0C5EC01 /* Session.swift */; };
 		1E1CD5BAAD46BEA87964AFB4 /* AppSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BF4613CA07AF8A946E53EFD /* AppSurface.swift */; };
 		212DA4D8AFFA7505DE51EC92 /* WebKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = C84663817B0A1C47B57B9935 /* WebKeys.swift */; };
@@ -18,8 +19,11 @@
 		29C88887B13CF7E04090EB4E /* Encoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A731BA840E4FB5A78CD9DE6 /* Encoder.swift */; };
 		3406118C88B8F2D0731B24E0 /* Wire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97341ACCCA8D3BD786C61E8D /* Wire.swift */; };
 		35633551F16356CBC5F5F040 /* VideoSamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2386EDDEE0862E84DFA0123E /* VideoSamples.swift */; };
+		3CEC462C2B29525CAF5B3B44 /* AudioSamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC51621000FBF63C276FFBCA /* AudioSamples.swift */; };
+		3F7950537F8576486A45CDB1 /* AudioEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C74F8DDF909E4914F5A5ACD /* AudioEncoder.swift */; };
 		456B61018428CB3DC04E3701 /* Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C02F4DF23EE0C9FC3FCD425 /* Geometry.swift */; };
 		48B29E080738A1F80CD8F866 /* VideoSamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2386EDDEE0862E84DFA0123E /* VideoSamples.swift */; };
+		5921249F148D3967E5B181A5 /* AudioSamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC51621000FBF63C276FFBCA /* AudioSamples.swift */; };
 		5C3627121D7E37EC021DE2B1 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8E0575BDFD4229FA1CE2407 /* Agent.swift */; };
 		68577474D0F4D888E0375104 /* Wire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97341ACCCA8D3BD786C61E8D /* Wire.swift */; };
 		6E99809692781FE7E8E51CC7 /* Peers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B29ECF9D87FE431CE9AF902 /* Peers.swift */; };
@@ -30,6 +34,7 @@
 		8BF081278A75DCAAC1732524 /* Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C02F4DF23EE0C9FC3FCD425 /* Geometry.swift */; };
 		99908B1AD88E17E3265E03C2 /* Encoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A731BA840E4FB5A78CD9DE6 /* Encoder.swift */; };
 		A26F7DEDF058C3DD3936B13A /* Windows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03EE377F04F3A1E6A0F5221C /* Windows.swift */; };
+		AD8E1FEA0FC04B267BFEC8C8 /* AudioCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B5E8E6B7260C5E0E375A2E /* AudioCapture.swift */; };
 		B0660B7D4B596C57528F9184 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFC7279A63EA921FE7F34724 /* main.swift */; };
 		BAEF7110D88A484C98435055 /* Peers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B29ECF9D87FE431CE9AF902 /* Peers.swift */; };
 		BF75C51B52F77B91D85199DC /* WebKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = C84663817B0A1C47B57B9935 /* WebKeys.swift */; };
@@ -40,10 +45,12 @@
 		CAED38C0864ED3DC578FF4F7 /* VirtualDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0359963F240EF91532A73D45 /* VirtualDisplay.swift */; };
 		CF86829A514F42C3D50645C6 /* Keys.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8D1229797D17DAA1F040E85 /* Keys.swift */; };
 		D09A885A06214FB40D5E84DD /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 59273839F5338915CEDB548C /* SwiftTerm */; };
+		D61B0A4A4AE8B3484AFBA928 /* AudioSamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC51621000FBF63C276FFBCA /* AudioSamples.swift */; };
 		D81F753B323337205C0FA251 /* TerminalSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B6474528E6292F83C15F0B /* TerminalSurface.swift */; };
 		DE1D809A131054E6BB19DED0 /* VideoSamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2386EDDEE0862E84DFA0123E /* VideoSamples.swift */; };
 		E82B6291539C4B42074DB27F /* Input.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48031D791F28DFE00ABB58F1 /* Input.swift */; };
 		F5B14197C6BC7F373E084E96 /* Keys.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8D1229797D17DAA1F040E85 /* Keys.swift */; };
+		FA0148305C13DB28704A32BC /* AudioEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C74F8DDF909E4914F5A5ACD /* AudioEncoder.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -59,6 +66,7 @@
 		48E1254021ACB71FD0AC8A2D /* PanesAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PanesAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		49B6474528E6292F83C15F0B /* TerminalSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurface.swift; sourceTree = "<group>"; };
 		61E93C4AA2472DB3C5810F79 /* KeyInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyInputView.swift; sourceTree = "<group>"; };
+		6C74F8DDF909E4914F5A5ACD /* AudioEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEncoder.swift; sourceTree = "<group>"; };
 		7827409F69224E37C327FFBF /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
 		8289927C31790B63942935F0 /* PanesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PanesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		83A1DAD3FB296EB84D35FA0F /* AgentLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLink.swift; sourceTree = "<group>"; };
@@ -66,9 +74,12 @@
 		9C02F4DF23EE0C9FC3FCD425 /* Geometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geometry.swift; sourceTree = "<group>"; };
 		AA5A26CE2262690FF5B2FB1D /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
 		B10143F1DAF004874F14762F /* SharedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTests.swift; sourceTree = "<group>"; };
+		B1AB97DBF99D0F7C1FC02A07 /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
+		B2B5E8E6B7260C5E0E375A2E /* AudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCapture.swift; sourceTree = "<group>"; };
 		B8D1229797D17DAA1F040E85 /* Keys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keys.swift; sourceTree = "<group>"; };
 		C74AD2F22CE118F910F5BBB4 /* Agent-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Agent-Bridging-Header.h"; sourceTree = "<group>"; };
 		C84663817B0A1C47B57B9935 /* WebKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebKeys.swift; sourceTree = "<group>"; };
+		DC51621000FBF63C276FFBCA /* AudioSamples.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSamples.swift; sourceTree = "<group>"; };
 		DFC7279A63EA921FE7F34724 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		E8E0575BDFD4229FA1CE2407 /* Agent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent.swift; sourceTree = "<group>"; };
 		F00780B11E4EED4EC0C5EC01 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
@@ -101,6 +112,7 @@
 			children = (
 				83A1DAD3FB296EB84D35FA0F /* AgentLink.swift */,
 				1BF4613CA07AF8A946E53EFD /* AppSurface.swift */,
+				B1AB97DBF99D0F7C1FC02A07 /* AudioPlayer.swift */,
 				61E93C4AA2472DB3C5810F79 /* KeyInputView.swift */,
 				7827409F69224E37C327FFBF /* Model.swift */,
 				37A9EC06AE75DD4062FFFBFD /* PanesApp.swift */,
@@ -133,6 +145,7 @@
 		846B5C9BD82D4094520594BB /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				DC51621000FBF63C276FFBCA /* AudioSamples.swift */,
 				9C02F4DF23EE0C9FC3FCD425 /* Geometry.swift */,
 				B8D1229797D17DAA1F040E85 /* Keys.swift */,
 				2386EDDEE0862E84DFA0123E /* VideoSamples.swift */,
@@ -147,6 +160,8 @@
 			children = (
 				C74AD2F22CE118F910F5BBB4 /* Agent-Bridging-Header.h */,
 				E8E0575BDFD4229FA1CE2407 /* Agent.swift */,
+				B2B5E8E6B7260C5E0E375A2E /* AudioCapture.swift */,
+				6C74F8DDF909E4914F5A5ACD /* AudioEncoder.swift */,
 				1A731BA840E4FB5A78CD9DE6 /* Encoder.swift */,
 				48031D791F28DFE00ABB58F1 /* Input.swift */,
 				2B29ECF9D87FE431CE9AF902 /* Peers.swift */,
@@ -310,6 +325,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				5C3627121D7E37EC021DE2B1 /* Agent.swift in Sources */,
+				AD8E1FEA0FC04B267BFEC8C8 /* AudioCapture.swift in Sources */,
+				3F7950537F8576486A45CDB1 /* AudioEncoder.swift in Sources */,
+				5921249F148D3967E5B181A5 /* AudioSamples.swift in Sources */,
 				29C88887B13CF7E04090EB4E /* Encoder.swift in Sources */,
 				8450F9E26DF792807692491E /* Geometry.swift in Sources */,
 				E82B6291539C4B42074DB27F /* Input.swift in Sources */,
@@ -331,6 +349,8 @@
 			files = (
 				03D8122FDB6967641AD4831A /* AgentLink.swift in Sources */,
 				1E1CD5BAAD46BEA87964AFB4 /* AppSurface.swift in Sources */,
+				1054E44EB6CA4352DCE4BCE9 /* AudioPlayer.swift in Sources */,
+				D61B0A4A4AE8B3484AFBA928 /* AudioSamples.swift in Sources */,
 				8BF081278A75DCAAC1732524 /* Geometry.swift in Sources */,
 				22BAB67D960DF7C9C320C695 /* KeyInputView.swift in Sources */,
 				CF86829A514F42C3D50645C6 /* Keys.swift in Sources */,
@@ -348,6 +368,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FA0148305C13DB28704A32BC /* AudioEncoder.swift in Sources */,
+				3CEC462C2B29525CAF5B3B44 /* AudioSamples.swift in Sources */,
 				99908B1AD88E17E3265E03C2 /* Encoder.swift in Sources */,
 				456B61018428CB3DC04E3701 /* Geometry.swift in Sources */,
 				C1AEE6FB4910D43BD905508D /* Keys.swift in Sources */,

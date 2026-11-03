@@ -11,11 +11,24 @@ import Foundation
 /// - videoFrame: `[flags: u8][pts: u64 microseconds][AVCC data]`, where flags
 ///   bit 0 marks a keyframe and AVCC data is 4-byte-length-prefixed NAL units.
 /// - terminal: raw terminal bytes, either direction (keys in, screen output out).
+/// - audioFormat: `[sampleRate: f64][channels: u32][framesPerPacket: u32][magic cookie]`
+///   for the AAC stream that follows.
+/// - audioFrame: `[pts: u64 microseconds][one AAC packet]`.
 enum FrameType: UInt8 {
     case control = 1
     case videoFormat = 2
     case videoFrame = 3
     case terminal = 4
+    case audioFormat = 5
+    case audioFrame = 6
+}
+
+/// The AAC stream an agent sends for a window's app.
+struct AudioFormat: Equatable {
+    var sampleRate: Double
+    var channels: UInt32
+    var framesPerPacket: UInt32
+    var cookie: Data
 }
 
 struct Frame: Equatable {
@@ -72,6 +85,35 @@ enum Wire {
         return encode(.videoFrame, p)
     }
 
+    static func audioFormat(_ f: AudioFormat) -> Data {
+        var p = Data(f.sampleRate.bitPattern.bigEndianBytes)
+        p.append(contentsOf: f.channels.bigEndianBytes)
+        p.append(contentsOf: f.framesPerPacket.bigEndianBytes)
+        p.append(f.cookie)
+        return encode(.audioFormat, p)
+    }
+
+    static func parseAudioFormat(_ p: Data) -> AudioFormat? {
+        guard p.count >= 16 else { return nil }
+        let b = [UInt8](p)
+        func u64(_ at: Int) -> UInt64 { b[at..<at + 8].reduce(0) { $0 << 8 | UInt64($1) } }
+        func u32(_ at: Int) -> UInt32 { b[at..<at + 4].reduce(0) { $0 << 8 | UInt32($1) } }
+        return AudioFormat(sampleRate: Double(bitPattern: u64(0)), channels: u32(8), framesPerPacket: u32(12),
+                           cookie: Data(b[16...]))
+    }
+
+    static func audioFrame(ptsMicros: UInt64, packet: Data) -> Data {
+        var p = Data(ptsMicros.bigEndianBytes)
+        p.append(packet)
+        return encode(.audioFrame, p)
+    }
+
+    static func parseAudioFrame(_ p: Data) -> (ptsMicros: UInt64, packet: Data)? {
+        guard p.count > 8 else { return nil }
+        let pts = [UInt8](p.prefix(8)).reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
+        return (pts, p.subdata(in: p.startIndex + 8..<p.endIndex))
+    }
+
     static func parseVideoFrame(_ p: Data) -> (keyframe: Bool, ptsMicros: UInt64, avcc: Data)? {
         guard p.count >= 9 else { return nil }
         let b = [UInt8](p.prefix(9))
@@ -119,6 +161,8 @@ struct Control: Codable, Equatable {
     var windows: [WindowInfo]? = nil
     var windowID: UInt32? = nil
     var viewport: Size? = nil
+    /// Window tabs: also stream the app's sound.
+    var audio: Bool? = nil
     /// Window points per phone point when fitting (bigger = more fits, smaller text).
     var zoom: Double? = nil
     var title: String? = nil
