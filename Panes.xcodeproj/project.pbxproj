@@ -12,6 +12,8 @@
 		07AC2CF3E668B085510F8F14 /* Wire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97341ACCCA8D3BD786C61E8D /* Wire.swift */; };
 		136005F99A63F5EC2CCF1E6B /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00780B11E4EED4EC0C5EC01 /* Session.swift */; };
 		1E1CD5BAAD46BEA87964AFB4 /* AppSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BF4613CA07AF8A946E53EFD /* AppSurface.swift */; };
+		212DA4D8AFFA7505DE51EC92 /* WebKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = C84663817B0A1C47B57B9935 /* WebKeys.swift */; };
+		22BAB67D960DF7C9C320C695 /* KeyInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61E93C4AA2472DB3C5810F79 /* KeyInputView.swift */; };
 		277AE69DE82DF38980C3057F /* PanesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37A9EC06AE75DD4062FFFBFD /* PanesApp.swift */; };
 		29C88887B13CF7E04090EB4E /* Encoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A731BA840E4FB5A78CD9DE6 /* Encoder.swift */; };
 		3406118C88B8F2D0731B24E0 /* Wire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97341ACCCA8D3BD786C61E8D /* Wire.swift */; };
@@ -30,8 +32,10 @@
 		A26F7DEDF058C3DD3936B13A /* Windows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03EE377F04F3A1E6A0F5221C /* Windows.swift */; };
 		B0660B7D4B596C57528F9184 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFC7279A63EA921FE7F34724 /* main.swift */; };
 		BAEF7110D88A484C98435055 /* Peers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B29ECF9D87FE431CE9AF902 /* Peers.swift */; };
+		BF75C51B52F77B91D85199DC /* WebKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = C84663817B0A1C47B57B9935 /* WebKeys.swift */; };
 		C1AEE6FB4910D43BD905508D /* Keys.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8D1229797D17DAA1F040E85 /* Keys.swift */; };
 		C5A6CCD43E6BC2C7C2EBD9CB /* Wire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97341ACCCA8D3BD786C61E8D /* Wire.swift */; };
+		C6077653ADAAFFF5F2206C8E /* WebKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = C84663817B0A1C47B57B9935 /* WebKeys.swift */; };
 		C78879F546B286C599E3CE29 /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7827409F69224E37C327FFBF /* Model.swift */; };
 		CAED38C0864ED3DC578FF4F7 /* VirtualDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0359963F240EF91532A73D45 /* VirtualDisplay.swift */; };
 		CF86829A514F42C3D50645C6 /* Keys.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8D1229797D17DAA1F040E85 /* Keys.swift */; };
@@ -54,6 +58,7 @@
 		48031D791F28DFE00ABB58F1 /* Input.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Input.swift; sourceTree = "<group>"; };
 		48E1254021ACB71FD0AC8A2D /* PanesAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PanesAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		49B6474528E6292F83C15F0B /* TerminalSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurface.swift; sourceTree = "<group>"; };
+		61E93C4AA2472DB3C5810F79 /* KeyInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyInputView.swift; sourceTree = "<group>"; };
 		7827409F69224E37C327FFBF /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
 		8289927C31790B63942935F0 /* PanesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PanesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		83A1DAD3FB296EB84D35FA0F /* AgentLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLink.swift; sourceTree = "<group>"; };
@@ -63,6 +68,7 @@
 		B10143F1DAF004874F14762F /* SharedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTests.swift; sourceTree = "<group>"; };
 		B8D1229797D17DAA1F040E85 /* Keys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keys.swift; sourceTree = "<group>"; };
 		C74AD2F22CE118F910F5BBB4 /* Agent-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Agent-Bridging-Header.h"; sourceTree = "<group>"; };
+		C84663817B0A1C47B57B9935 /* WebKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebKeys.swift; sourceTree = "<group>"; };
 		DFC7279A63EA921FE7F34724 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		E8E0575BDFD4229FA1CE2407 /* Agent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent.swift; sourceTree = "<group>"; };
 		F00780B11E4EED4EC0C5EC01 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
@@ -95,6 +101,7 @@
 			children = (
 				83A1DAD3FB296EB84D35FA0F /* AgentLink.swift */,
 				1BF4613CA07AF8A946E53EFD /* AppSurface.swift */,
+				61E93C4AA2472DB3C5810F79 /* KeyInputView.swift */,
 				7827409F69224E37C327FFBF /* Model.swift */,
 				37A9EC06AE75DD4062FFFBFD /* PanesApp.swift */,
 				AA5A26CE2262690FF5B2FB1D /* StreamView.swift */,
@@ -129,6 +136,7 @@
 				9C02F4DF23EE0C9FC3FCD425 /* Geometry.swift */,
 				B8D1229797D17DAA1F040E85 /* Keys.swift */,
 				2386EDDEE0862E84DFA0123E /* VideoSamples.swift */,
+				C84663817B0A1C47B57B9935 /* WebKeys.swift */,
 				97341ACCCA8D3BD786C61E8D /* Wire.swift */,
 			);
 			path = Shared;
@@ -311,6 +319,7 @@
 				00BFC21FDC0F989F617028C4 /* Terminal.swift in Sources */,
 				DE1D809A131054E6BB19DED0 /* VideoSamples.swift in Sources */,
 				CAED38C0864ED3DC578FF4F7 /* VirtualDisplay.swift in Sources */,
+				212DA4D8AFFA7505DE51EC92 /* WebKeys.swift in Sources */,
 				A26F7DEDF058C3DD3936B13A /* Windows.swift in Sources */,
 				3406118C88B8F2D0731B24E0 /* Wire.swift in Sources */,
 			);
@@ -323,12 +332,14 @@
 				03D8122FDB6967641AD4831A /* AgentLink.swift in Sources */,
 				1E1CD5BAAD46BEA87964AFB4 /* AppSurface.swift in Sources */,
 				8BF081278A75DCAAC1732524 /* Geometry.swift in Sources */,
+				22BAB67D960DF7C9C320C695 /* KeyInputView.swift in Sources */,
 				CF86829A514F42C3D50645C6 /* Keys.swift in Sources */,
 				C78879F546B286C599E3CE29 /* Model.swift in Sources */,
 				277AE69DE82DF38980C3057F /* PanesApp.swift in Sources */,
 				803A26E4FCED1648362BDD90 /* StreamView.swift in Sources */,
 				D81F753B323337205C0FA251 /* TerminalSurface.swift in Sources */,
 				48B29E080738A1F80CD8F866 /* VideoSamples.swift in Sources */,
+				BF75C51B52F77B91D85199DC /* WebKeys.swift in Sources */,
 				68577474D0F4D888E0375104 /* Wire.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -343,6 +354,7 @@
 				6E99809692781FE7E8E51CC7 /* Peers.swift in Sources */,
 				7A2134818F2EA0AC0E1F3E58 /* SharedTests.swift in Sources */,
 				88E2895BC1AB28B8FB4591C0 /* VideoSamples.swift in Sources */,
+				C6077653ADAAFFF5F2206C8E /* WebKeys.swift in Sources */,
 				07AC2CF3E668B085510F8F14 /* Wire.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -39,6 +39,11 @@ struct PanesApp: App {
                 for _ in 0..<50 where list.loading { try? await Task.sleep(for: .milliseconds(200)) }
                 if let a = list.apps.first(where: { $0.name.localizedCaseInsensitiveContains(appName) }) {
                     store.openApp(a, on: machine)
+                    // PANES_TYPE="<text>": type it into the app once it's up (tests the key path).
+                    if let text = env["PANES_TYPE"] {
+                        try? await Task.sleep(for: .seconds(10))
+                        store.current?.sendToPage(InputEvent(kind: "text", text: text))
+                    }
                 }
             }
             return
@@ -169,7 +174,7 @@ struct TabScreen: View {
             if case .terminal = tab.kind {
                 TerminalSurface(tab: tab, keyboard: $keyboard)
             } else if case .app = tab.kind {
-                AppSurface(tab: tab)
+                AppSurface(tab: tab, keyboard: $keyboard)
             } else {
                 StreamSurface(tab: tab, keyboard: $keyboard)
                     .ignoresSafeArea(.keyboard)

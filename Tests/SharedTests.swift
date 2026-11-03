@@ -168,3 +168,28 @@ final class TerminalWireTests: XCTestCase {
         XCTAssertEqual(frames, [Frame(type: .terminal, payload: Data("ls -la\r".utf8))])
     }
 }
+
+final class WebKeysTests: XCTestCase {
+    func testTypingMapsToDOMKeys() {
+        let keys = WebKeys.keys(for: InputEvent(kind: "text", text: "aB1."))
+        XCTAssertEqual(keys.map(\.key), ["a", "B", "1", "."])
+        XCTAssertEqual(keys.map(\.code), ["KeyA", "KeyB", "Digit1", "Period"])
+        XCTAssertEqual(keys.map(\.keyCode), [65, 66, 49, 190])
+        let plus = WebKeys.character("+")
+        XCTAssertEqual(plus, WebKeys.DOMKey(key: "+", code: "Equal", keyCode: 187, shift: true))
+        XCTAssertEqual(WebKeys.character("é").keyCode, 0)
+        XCTAssertEqual(keys.map(\.shift), [false, true, false, false])
+    }
+
+    func testSpecialKeysAndCommandBecomesControl() {
+        XCTAssertEqual(WebKeys.keys(for: InputEvent(kind: "key", key: "delete")).first?.key, "Backspace")
+        let copy = WebKeys.keys(for: InputEvent(kind: "key", key: "c", mods: ["cmd"]))
+        XCTAssertEqual(copy, [WebKeys.DOMKey(key: "c", code: "KeyC", keyCode: 67, ctrl: true)])
+        XCTAssertEqual(WebKeys.keys(for: InputEvent(kind: "text", text: "\n")).first?.key, "Enter")
+    }
+
+    func testScriptEscapesQuotes() {
+        let js = WebKeys.script(WebKeys.keys(for: InputEvent(kind: "text", text: "\"\\")))
+        XCTAssertEqual(js, #"panesKey("\"","Quote",222,false,false,true,false);panesKey("\\","Backslash",220,false,false,false,false);"#)
+    }
+}

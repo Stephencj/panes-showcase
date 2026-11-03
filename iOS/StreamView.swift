@@ -6,7 +6,7 @@ import UIKit
 /// tap = click (tap again quickly for double-click), long-press = right-click,
 /// one-finger drag = click-and-drag, two-finger drag = scroll.
 /// It's also the keyboard target, with an Esc/PaneTab/modifier/arrow row on top.
-final class StreamView: UIView, UIKeyInput {
+final class StreamView: KeyInputView {
     var tab: PaneTab? {
         didSet {
             oldValue?.renderer.removeFromSuperlayer()
@@ -18,8 +18,6 @@ final class StreamView: UIView, UIKeyInput {
 
     private var lastTap: (at: Date, point: CGPoint, clicks: Int)?
     private var lastScroll: CGPoint = .zero
-    private var sticky: Set<String> = []
-    private var modButtons: [String: UIButton] = [:]
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -53,6 +51,8 @@ final class StreamView: UIView, UIKeyInput {
 
     private func send(_ e: InputEvent) { tab?.send(e) }
 
+    override func emit(_ e: InputEvent) { send(e) }
+
     // MARK: touches
 
     @objc private func tapped(_ g: UITapGestureRecognizer) {
@@ -81,7 +81,7 @@ final class StreamView: UIView, UIKeyInput {
             // The pan only fires after some movement; press where the finger first landed.
             let t = g.translation(in: self)
             let start = Geometry.clampedNormalized(CGPoint(x: p.x - t.x, y: p.y - t.y), in: videoRect)
-            send(InputEvent(kind: "down", x: start.x, y: start.y, mods: Array(sticky)))
+            send(InputEvent(kind: "down", x: start.x, y: start.y, mods: Array(stickyMods)))
             send(InputEvent(kind: "drag", x: n.x, y: n.y))
         case .changed:
             send(InputEvent(kind: "drag", x: n.x, y: n.y))
@@ -110,112 +110,6 @@ final class StreamView: UIView, UIKeyInput {
         }
     }
 
-    // MARK: keyboard
-
-    override var canBecomeFirstResponder: Bool { true }
-    var hasText: Bool { true }
-    var autocorrectionType: UITextAutocorrectionType = .no
-    var autocapitalizationType: UITextAutocapitalizationType = .none
-    var smartQuotesType: UITextSmartQuotesType = .no
-    var smartDashesType: UITextSmartDashesType = .no
-    var spellCheckingType: UITextSpellCheckingType = .no
-    var keyboardType: UIKeyboardType = .asciiCapable
-
-    func insertText(_ text: String) {
-        if !sticky.isEmpty, text.count == 1, let name = Keys.name(for: text.first!) {
-            send(InputEvent(kind: "key", key: name, mods: takeSticky()))
-        } else if text == "\n" {
-            send(InputEvent(kind: "key", key: "return"))
-        } else {
-            send(InputEvent(kind: "text", text: text))
-        }
-    }
-
-    func deleteBackward() { send(InputEvent(kind: "key", key: "delete", mods: takeSticky())) }
-
-    /// Hardware keyboards: shortcuts and special keys go as key presses
-    /// (so ⌘S saves on the Mac); plain typing falls through to insertText.
-    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        var unhandled = Set<UIPress>()
-        for press in presses {
-            guard let key = press.key else { unhandled.insert(press); continue }
-            var mods: [String] = []
-            if key.modifierFlags.contains(.command) { mods.append("cmd") }
-            if key.modifierFlags.contains(.control) { mods.append("ctrl") }
-            if key.modifierFlags.contains(.alternate) { mods.append("opt") }
-            if key.modifierFlags.contains(.shift) { mods.append("shift") }
-            let special: String? = switch key.keyCode {
-            case .keyboardLeftArrow: "left"
-            case .keyboardRightArrow: "right"
-            case .keyboardUpArrow: "up"
-            case .keyboardDownArrow: "down"
-            case .keyboardEscape: "escape"
-            case .keyboardDeleteForward: "forwardDelete"
-            case .keyboardHome: "home"
-            case .keyboardEnd: "end"
-            case .keyboardPageUp: "pageUp"
-            case .keyboardPageDown: "pageDown"
-            default: nil
-            }
-            let hasShortcutMod = mods.contains { $0 != "shift" }
-            if let special {
-                send(InputEvent(kind: "key", key: special, mods: mods))
-            } else if hasShortcutMod, let ch = key.charactersIgnoringModifiers.first, let name = Keys.name(for: ch) {
-                send(InputEvent(kind: "key", key: name, mods: mods))
-            } else {
-                unhandled.insert(press)
-            }
-        }
-        if !unhandled.isEmpty { super.pressesBegan(unhandled, with: event) }
-    }
-
-    private func takeSticky() -> [String] {
-        let mods = Array(sticky)
-        sticky.removeAll()
-        modButtons.values.forEach { $0.isSelected = false; $0.backgroundColor = .secondarySystemFill }
-        return mods
-    }
-
-    override var inputAccessoryView: UIView? { keyRow }
-
-    private lazy var keyRow: UIView = {
-        let bar = UIInputView(frame: CGRect(x: 0, y: 0, width: 0, height: 44), inputViewStyle: .keyboard)
-        let stack = UIStackView()
-        stack.axis = .horizontal
-        stack.spacing = 6
-        stack.distribution = .fillEqually
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        bar.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 6),
-            stack.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -6),
-            stack.topAnchor.constraint(equalTo: bar.topAnchor, constant: 5),
-            stack.bottomAnchor.constraint(equalTo: bar.bottomAnchor, constant: -5),
-        ])
-        let keys: [(String, String)] = [("esc", "escape"), ("tab", "tab"), ("ctrl", "ctrl"), ("opt", "opt"),
-                                        ("⌘", "cmd"), ("←", "left"), ("↑", "up"), ("↓", "down"), ("→", "right")]
-        for (label, name) in keys {
-            let b = UIButton(type: .system)
-            b.setTitle(label, for: .normal)
-            b.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
-            b.backgroundColor = .secondarySystemFill
-            b.layer.cornerRadius = 6
-            b.tintColor = .label
-            b.addAction(UIAction { [weak self, weak b] _ in
-                guard let self, let b else { return }
-                if ["ctrl", "opt", "cmd"].contains(name) {
-                    if self.sticky.remove(name) == nil { self.sticky.insert(name) }
-                    b.isSelected = self.sticky.contains(name)
-                    b.backgroundColor = b.isSelected ? .tintColor.withAlphaComponent(0.5) : .secondarySystemFill
-                } else {
-                    self.send(InputEvent(kind: "key", key: name, mods: self.takeSticky()))
-                }
-            }, for: .touchUpInside)
-            if ["ctrl", "opt", "cmd"].contains(name) { modButtons[name] = b }
-            stack.addArrangedSubview(b)
-        }
-        return bar
-    }()
 }
 
 struct StreamSurface: UIViewRepresentable {
