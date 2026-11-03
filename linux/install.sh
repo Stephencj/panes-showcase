@@ -7,6 +7,11 @@ python3 -m unittest -q test_panes_agent.py
 mkdir -p ~/.local/share/panes ~/.config/systemd/user
 install -m 0644 panes_agent.py ~/.local/share/panes/panes_agent.py
 install -m 0644 panes-agent.service ~/.config/systemd/user/panes-agent.service
+# Xpra's browser client, for app tabs, when it was shipped alongside.
+if [[ -f xpra-html5/index.html ]]; then
+    rm -rf ~/.local/share/panes/xpra-html5
+    cp -R xpra-html5 ~/.local/share/panes/xpra-html5
+fi
 systemctl --user daemon-reload
 systemctl --user enable --now panes-agent.service
 systemctl --user restart panes-agent.service

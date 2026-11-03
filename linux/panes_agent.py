@@ -237,13 +237,21 @@ class Xpra:
 
     PORTS = range(14500, 14600)
 
+    # Xpra's browser client: the distro's copy, or the release Panes installs
+    # next to the agent (Fedora doesn't package it).
+    HTML_DIRS = ["/usr/share/xpra/www", os.path.expanduser("~/.local/share/panes/xpra-html5")]
+
     def __init__(self):
         self.binary = shutil.which("xpra")
         self.sessions = {}   # name -> dict(port, password, proc, app)
 
     @property
+    def html_dir(self):
+        return next((d for d in self.HTML_DIRS if os.path.isfile(os.path.join(d, "index.html"))), None)
+
+    @property
     def available(self):
-        return self.binary is not None
+        return self.binary is not None and self.html_dir is not None
 
     def _free_port(self, host):
         used = {s["port"] for s in self.sessions.values()}
@@ -265,7 +273,7 @@ class Xpra:
         cmd = [self.binary, "start", display, "--daemon=no",
                f"--start-child={app['command']}", "--exit-with-children=yes",
                f"--bind-tcp={host}:{port}", f"--tcp-auth=password:value={password}",
-               "--html=on", "--mdns=no", "--notifications=no", "--speaker=off", "--microphone=off",
+               f"--html={self.html_dir}", "--mdns=no", "--notifications=no", "--speaker=off", "--microphone=off",
                "--webcam=no", "--printing=no", "--file-transfer=no", "--dpi=144"]
         log = open(os.path.expanduser(f"~/.local/share/panes/xpra-{name}.log"), "ab")
         proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)

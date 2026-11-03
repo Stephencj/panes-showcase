@@ -146,8 +146,6 @@ final class PaneTab: ObservableObject, Identifiable {
             }
         case .control(let msg):
             switch msg.op {
-            case "hello":
-                if case .terminal = kind, let m = msg.machine { title = m }
             case "opened":
                 status = .live
                 if let t = msg.title, !t.isEmpty { title = t }
