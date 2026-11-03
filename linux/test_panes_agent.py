@@ -61,5 +61,11 @@ class AppTests(unittest.TestCase):
         self.assertIn("[fd7a::1]", pa.Xpra.url({"host": "fd7a::1", "port": 1, "password": "p"}))
 
 
+class EndTests(unittest.TestCase):
+    def test_ending_an_unknown_session_is_harmless(self):
+        pa.Xpra().end("nope")
+        pa.kill_tmux_session("panes-does-not-exist")
+
+
 if __name__ == "__main__":
     unittest.main()

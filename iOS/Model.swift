@@ -113,6 +113,17 @@ final class PaneTab: ObservableObject, Identifiable {
         status = .closed
     }
 
+    /// Closing a terminal or app tab ends its session on the machine (a
+    /// dropped connection doesn't, so programs survive the app being suspended).
+    func end() {
+        switch kind {
+        case .terminal(let session), .app(_, let session):
+            link?.send(Control(op: "end", name: session))
+        case .window:
+            break
+        }
+    }
+
     /// Background tabs stop their video (the connection stays) so only the
     /// tab on screen uses bandwidth.
     func setActive(_ on: Bool) {
@@ -257,7 +268,12 @@ final class Store: ObservableObject {
     }
 
     func close(_ tab: PaneTab) {
-        tab.close()
+        tab.end()
+        // Give the "end" a moment to go out before the socket closes.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            tab.close()
+        }
         tabs.removeAll { $0.id == tab.id }
         if selected == tab.id { selected = tabs.last?.id }
         if let s = selected { select(s) }

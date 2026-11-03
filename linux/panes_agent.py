@@ -236,6 +236,7 @@ class Xpra:
     password that only that phone tab is told."""
 
     PORTS = range(14500, 14600)
+    SECRETS = os.path.expanduser("~/.local/share/panes/sessions")
 
     # Xpra's browser client: the distro's copy, or the release Panes installs
     # next to the agent (Fedora doesn't package it).
@@ -267,19 +268,48 @@ class Xpra:
         live = self.sessions.get(name)
         if live and live["proc"].poll() is None and live["app"] == app["id"]:
             return live
+        if live:
+            self.end(name)
         port = self._free_port(host)
         password = secrets.token_urlsafe(18)
+        # The password goes in a file only this user can read, not on the
+        # command line where any local account could see it in ps.
+        os.makedirs(self.SECRETS, mode=0o700, exist_ok=True)
+        pw_file = os.path.join(self.SECRETS, f"{name}.pw")
+        fd = os.open(pw_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(password)
         display = f":{100 + port - self.PORTS.start}"
         cmd = [self.binary, "start", display, "--daemon=no",
                f"--start-child={app['command']}", "--exit-with-children=yes",
-               f"--bind-tcp={host}:{port}", f"--tcp-auth=password:value={password}",
+               f"--bind-tcp={host}:{port}", f"--tcp-auth=file:filename={pw_file}",
                f"--html={self.html_dir}", "--mdns=no", "--notifications=no", "--speaker=off", "--microphone=off",
                "--webcam=no", "--printing=no", "--file-transfer=no", "--dpi=144"]
         log = open(os.path.expanduser(f"~/.local/share/panes/xpra-{name}.log"), "ab")
         proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-        session = {"port": port, "password": password, "proc": proc, "app": app["id"], "host": host}
+        session = {"port": port, "password": password, "proc": proc, "app": app["id"], "host": host,
+                   "pw_file": pw_file}
         self.sessions[name] = session
         return session
+
+    def end(self, name):
+        """Stops an app session (the phone closed its tab)."""
+        session = self.sessions.pop(name, None)
+        if not session:
+            return
+        if session["proc"].poll() is None:
+            try:
+                os.killpg(session["proc"].pid, signal.SIGTERM)
+                session["proc"].wait(timeout=10)
+            except (ProcessLookupError, subprocess.TimeoutExpired):
+                try:
+                    os.killpg(session["proc"].pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+        try:
+            os.remove(session["pw_file"])
+        except OSError:
+            pass
 
     def ready(self, session, timeout=20.0):
         """Waits until the session's web client answers."""
@@ -305,6 +335,11 @@ class Xpra:
 
 
 XPRA = Xpra()
+
+
+def kill_tmux_session(name):
+    if shutil.which("tmux"):
+        subprocess.run(["tmux", "kill-session", "-t", f"={session_name(name)}"], capture_output=True)
 
 
 # ---- connection ------------------------------------------------------------
@@ -374,6 +409,14 @@ class Session:
             self.send(control({"op": "apps", "apps": [{"id": a["id"], "name": a["name"]} for a in apps]}))
         elif op == "launch":
             asyncio.ensure_future(self.launch(msg))
+        elif op == "end":
+            # The phone closed the tab on purpose: stop what it was attached to.
+            name = session_name(msg.get("name"))
+            if self.terminal:
+                self.terminal.close()
+                self.terminal = None
+            kill_tmux_session(name)
+            XPRA.end(name)
         elif op == "terminal":
             if self.terminal:
                 self.terminal.close()

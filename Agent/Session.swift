@@ -94,6 +94,11 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
             if let event = msg.event, let id = windowID { input.handle(event, window: id) }
         case "terminal":
             openTerminal(msg)
+        case "end":
+            // The phone closed the tab on purpose: end its tmux session too.
+            terminal?.close()
+            terminal = nil
+            Terminal.killSession(Wire.sessionName(msg.name))
         case "resize":
             terminal?.resize(cols: msg.cols ?? 80, rows: msg.rows ?? 24)
         case "keyframe":

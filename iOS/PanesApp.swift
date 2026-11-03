@@ -18,7 +18,8 @@ struct PanesApp: App {
     }
 
     /// For tests: PANES_OPEN="<title text>" opens that window on the first machine
-    /// at launch; PANES_TERMINAL=<command> opens a terminal there and types the command.
+    /// at launch; PANES_TERMINAL=<command> opens a terminal there and types the command;
+    /// PANES_APP=<name> launches that Linux app.
     private func autoOpen() {
         let env = ProcessInfo.processInfo.environment
         let machine = Machine.defaults[0]
@@ -27,6 +28,18 @@ struct PanesApp: App {
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(2))
                 store.current?.sendTerminal(Data((command + "\r").utf8))
+            }
+            return
+        }
+        if let appName = env["PANES_APP"], store.tabs.isEmpty {
+            // PANES_APP="<app name>": launch that Linux app from the first machine.
+            let list = WindowList()
+            list.load(machine)
+            Task { @MainActor in
+                for _ in 0..<50 where list.loading { try? await Task.sleep(for: .milliseconds(200)) }
+                if let a = list.apps.first(where: { $0.name.localizedCaseInsensitiveContains(appName) }) {
+                    store.openApp(a, on: machine)
+                }
             }
             return
         }

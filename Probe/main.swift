@@ -15,9 +15,11 @@ var args = CommandLine.arguments.dropFirst()
 var opts: [String: String] = [:]
 while let key = args.popFirst() { if key.hasPrefix("--") { opts[String(key.dropFirst(2))] = args.popFirst() ?? "" } }
 let terminalMode = opts["terminal"] != nil
-guard let titleNeedle = opts["title"] ?? (terminalMode ? "" : nil) else {
+let appNeedle = opts["app"]
+guard let titleNeedle = opts["title"] ?? (terminalMode || appNeedle != nil ? "" : nil) else {
     print("usage: panes-probe --title TEXT [--host H] [--port P] [--fit WxH] [--type TEXT] [--png PATH]")
     print("       panes-probe --terminal NAME [--host H] [--port P]   (runs a command in a terminal tab)")
+    print("       panes-probe --app TEXT [--host H]   (launches a Linux app; checks its web client answers)")
     exit(2)
 }
 var terminalOutput = ""
@@ -110,9 +112,32 @@ func handle(_ frame: Frame) {
             summary["features"] = msg.features
             if terminalMode {
                 send(Control(op: "terminal", name: opts["terminal"], cols: 100, rows: 30))
+            } else if appNeedle != nil {
+                send(Control(op: "apps"))
             } else {
                 send(Control(op: "list"))
             }
+        case "apps":
+            let apps = msg.apps ?? []
+            summary["appCount"] = apps.count
+            guard let a = apps.first(where: { $0.name.localizedCaseInsensitiveContains(appNeedle ?? "") || $0.id.localizedCaseInsensitiveContains(appNeedle ?? "") }) else {
+                return finish(false, "no app like \(appNeedle ?? "")")
+            }
+            summary["app"] = "\(a.name) (\(a.id))"
+            send(Control(op: "launch", app: a.id, name: opts["session"] ?? "panes-probe-app"))
+        case "launched":
+            summary["launchedMs"] = Int(Date().timeIntervalSince(started) * 1000)
+            guard let u = msg.url.flatMap(URL.init(string:)) else { return finish(false, "no url") }
+            summary["url"] = u.absoluteString.replacingOccurrences(of: #"password=[^&]+"#, with: "password=…", options: .regularExpression)
+            URLSession.shared.dataTask(with: u) { data, resp, err in
+                DispatchQueue.main.async {
+                    let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                    let page = String(decoding: data ?? Data(), as: UTF8.self)
+                    summary["httpStatus"] = code
+                    summary["looksLikeXpra"] = page.localizedCaseInsensitiveContains("xpra")
+                    finish(code == 200 && page.localizedCaseInsensitiveContains("xpra"), err.map { "\($0)" })
+                }
+            }.resume()
         case "terminalOpened":
             summary["session"] = msg.name
             conn.send(content: Wire.encode(.terminal, Data("echo PANES_$((6*7))\r".utf8)), completion: .idempotent)
