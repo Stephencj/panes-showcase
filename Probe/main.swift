@@ -89,6 +89,8 @@ func decoded(_ image: CVImageBuffer) {
         summary["png"] = path
     }
     if let text = opts["type"] {
+        // --wait S: let the window settle before clicking and typing.
+        if let wait = opts["wait"].flatMap(Double.init) { Thread.sleep(forTimeInterval: wait) }
         send(Control(op: "input", event: InputEvent(kind: "click", x: 0.5, y: 0.5)))
         send(Control(op: "input", event: InputEvent(kind: "text", text: text)))
         typed = true

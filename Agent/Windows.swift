@@ -71,6 +71,63 @@ enum Windows {
         }
     }
 
+    /// The window number of an app's focused window, asked live.
+    static func focusedWindow(pid: pid_t) -> UInt32? {
+        let app = AXUIElementCreateApplication(pid)
+        guard let w = attribute(app, kAXFocusedWindowAttribute) else { return nil }
+        var wid: CGWindowID = 0
+        return _AXUIElementGetWindow(w as! AXUIElement, &wid) == .success ? wid : nil
+    }
+
+    /// Whether keys can go to the app's focused window on this window's
+    /// behalf: the window itself, or a dialog, sheet or panel the app put up
+    /// (pressing Return or Esc there is the point). Not another document window.
+    static func focusIsOn(_ id: UInt32, pid: pid_t) -> Bool {
+        let app = AXUIElementCreateApplication(pid)
+        guard let w = attribute(app, kAXFocusedWindowAttribute) else { return false }
+        var wid: CGWindowID = 0
+        if _AXUIElementGetWindow(w as! AXUIElement, &wid) == .success, wid == id { return true }
+        let role = attribute(w as! AXUIElement, kAXRoleAttribute) as? String
+        let subrole = attribute(w as! AXUIElement, kAXSubroleAttribute) as? String
+        return !(role == kAXWindowRole && subrole == kAXStandardWindowSubrole)
+    }
+
+    /// The app that has keyboard focus right now, asked live (NSWorkspace's
+    /// answer lags until the main run loop catches up).
+    static func focusedPID() -> pid_t? {
+        let system = AXUIElementCreateSystemWide()
+        guard let app = attribute(system, kAXFocusedApplicationAttribute) else { return nil }
+        var pid: pid_t = 0
+        return AXUIElementGetPid(app as! AXUIElement, &pid) == .success ? pid : nil
+    }
+
+    /// Focuses the window and waits (briefly) until it really has the keyboard:
+    /// its app in front, and it (or a dialog of the app's) focused rather than
+    /// another of the app's documents. False if that never happens, so keys
+    /// aren't typed anywhere else.
+    @discardableResult
+    static func focusAndWait(_ id: UInt32, timeout: TimeInterval = 0.8) -> Bool {
+        guard let pid = pid(id) else { return false }
+        focus(id)
+        let end = Date().addingTimeInterval(timeout)
+        var nudged = false
+        while Date() < end {
+            if focusedPID() == pid {
+                if focusIsOn(id, pid: pid) { return true }
+                if !nudged, let w = axWindow(id, pid: pid) {
+                    // The app is in front but another of its windows has focus.
+                    let app = AXUIElementCreateApplication(pid)
+                    AXUIElementSetAttributeValue(w, kAXMainAttribute as CFString, kCFBooleanTrue)
+                    AXUIElementSetAttributeValue(app, kAXFocusedWindowAttribute as CFString, w)
+                    AXUIElementPerformAction(w, kAXRaiseAction as CFString)
+                    nudged = true
+                }
+            }
+            usleep(10_000)
+        }
+        return focusedPID() == pid && focusIsOn(id, pid: pid)
+    }
+
     /// Moves and resizes a window (global top-left points). Returns what the
     /// app actually allowed, since apps enforce their own minimum sizes.
     @discardableResult

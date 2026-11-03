@@ -15,18 +15,18 @@ final class Input {
         case "move":
             mouse(.mouseMoved, at: point, button: .left)
         case "click":
-            Windows.focus(id)
+            Windows.focusAndWait(id)
             let clicks = Int64(max(1, e.clicks ?? 1))
             mouse(.mouseMoved, at: point, button: .left)
             mouse(.leftMouseDown, at: point, button: .left, clicks: clicks, flags: flags)
             mouse(.leftMouseUp, at: point, button: .left, clicks: clicks, flags: flags)
         case "rightClick":
-            Windows.focus(id)
+            Windows.focusAndWait(id)
             mouse(.mouseMoved, at: point, button: .right)
             mouse(.rightMouseDown, at: point, button: .right, flags: flags)
             mouse(.rightMouseUp, at: point, button: .right, flags: flags)
         case "down":
-            Windows.focus(id)
+            Windows.focusAndWait(id)
             mouse(.mouseMoved, at: point, button: .left)
             mouse(.leftMouseDown, at: point, button: .left, flags: flags)
             buttonDown = true
@@ -46,10 +46,13 @@ final class Input {
                 ev.post(tap: .cghidEventTap)
             }
         case "text":
-            Windows.focus(id)
+            guard Windows.focusAndWait(id) else {
+                let holder = Windows.pid(id).flatMap { Windows.focusedWindow(pid: $0) }
+                return print("dropped typing: window \(id) didn't get focus (focused: \(holder.map(String.init) ?? "none"))")
+            }
             type(e.text ?? "")
         case "key":
-            Windows.focus(id)
+            guard Windows.focusAndWait(id) else { return print("dropped key: window didn't get focus") }
             if let name = e.key, let code = Keys.codes[name] { press(code, flags: flags) }
         default:
             break
