@@ -62,6 +62,12 @@ class AppTests(unittest.TestCase):
 
 
 class EndTests(unittest.TestCase):
+    def test_only_panes_sessions_can_be_ended(self):
+        self.assertTrue(pa.is_panes_session("panes-1a2b3c"))
+        self.assertFalse(pa.is_panes_session("work"))
+        self.assertFalse(pa.is_panes_session("panes-"))
+        self.assertFalse(pa.is_panes_session("mypanes-x"))
+
     def test_ending_an_unknown_session_is_harmless(self):
         pa.Xpra().end("nope")
         pa.kill_tmux_session("panes-does-not-exist")

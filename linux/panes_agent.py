@@ -39,6 +39,11 @@ def control(msg):
     return frame(CONTROL, json.dumps(msg, separators=(",", ":")).encode())
 
 
+def is_panes_session(name):
+    """Same rule as Wire.isPanesSession: only panes-… sessions may be ended."""
+    return name.startswith("panes-") and len(name) > 6
+
+
 def session_name(raw):
     """Same rule as Wire.sessionName: ASCII letters, digits, - and _, max 40."""
     cleaned = re.sub(r"[^A-Za-z0-9_-]", "", raw or "")[:40]
@@ -338,7 +343,7 @@ XPRA = Xpra()
 
 
 def kill_tmux_session(name):
-    if shutil.which("tmux"):
+    if is_panes_session(name) and shutil.which("tmux"):
         subprocess.run(["tmux", "kill-session", "-t", f"={session_name(name)}"], capture_output=True)
 
 
@@ -412,6 +417,8 @@ class Session:
         elif op == "end":
             # The phone closed the tab on purpose: stop what it was attached to.
             name = session_name(msg.get("name"))
+            if not is_panes_session(name):
+                return
             if self.terminal:
                 self.terminal.close()
                 self.terminal = None

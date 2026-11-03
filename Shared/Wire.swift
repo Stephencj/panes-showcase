@@ -152,6 +152,10 @@ extension Wire {
         }.prefix(40))
         return cleaned.isEmpty ? "panes" : cleaned
     }
+
+    /// Sessions the phone creates are named panes-…; only those may be ended
+    /// from the phone, so it can never kill a tmux session the user made.
+    static func isPanesSession(_ name: String) -> Bool { name.hasPrefix("panes-") && name.count > 6 }
 }
 
 struct Size: Codable, Equatable {
