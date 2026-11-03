@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """Panes agent for Linux: serves terminal tabs (and, with Xpra, app windows)
-to the Panes app on the phone. Standard library only.
+to the Panes app on the phone, and to Panes Web in a browser. Standard library only.
 
 Same wire format as the Mac agent (Shared/Wire.swift): TCP, one connection
-per tab, frames of [type u8][length u32 big-endian][payload].
+per tab, frames of [type u8][length u32 big-endian][payload]. Panes Web
+(docs/WEB.md) carries the same frames over a WebSocket, one per message, on
+a loopback HTTP server that `tailscale serve` publishes as HTTPS on 7443.
 
     python3 panes_agent.py            # port 7890, or PANES_PORT
+                                      # web on 127.0.0.1:7891, or PANES_WEB_PORT
 """
 import asyncio
+import base64
 import configparser
 import fcntl
 import glob
+import hashlib
 import secrets
 import json
 import os
@@ -25,10 +30,13 @@ import subprocess
 import sys
 import termios
 import time
+import urllib.parse
 
 CONTROL, VIDEO_FORMAT, VIDEO_FRAME, TERMINAL = 1, 2, 3, 4
 VERSION = 1
 MAX_PAYLOAD = 32 * 1024 * 1024
+WEB_PORT = 7891          # loopback HTTP; tailscale serve publishes it as HTTPS on WEB_TLS_PORT
+WEB_TLS_PORT = 7443
 
 
 def frame(kind, payload):
@@ -75,10 +83,12 @@ def is_tailnet(ip):
 class Peers:
     """This machine, or tailnet devices owned by the same Tailscale user."""
 
-    def __init__(self):
+    def __init__(self, status=None):
         self.tailscale = shutil.which("tailscale") or "/usr/bin/tailscale"
         self.cache = {}
         self.owner = None
+        # `tailscale status --json`; tests pass one in instead.
+        self._status, self._status_at = status, 0.0
 
     def _json(self, *args):
         try:
@@ -87,12 +97,27 @@ class Peers:
         except Exception:
             return None
 
+    def status(self):
+        """Kept once read; while tailscale is down, asked again at most every 30 s."""
+        if self._status is None and time.time() - self._status_at > 30:
+            self._status_at = time.time()
+            self._status = self._json("status", "--json")
+        return self._status or {}
+
     def owner_login(self):
         if self.owner is None:
-            st = self._json("status", "--json") or {}
+            st = self.status()
             uid = str((st.get("Self") or {}).get("UserID", ""))
             self.owner = ((st.get("User") or {}).get(uid) or {}).get("LoginName")
         return self.owner
+
+    def magic_dns_suffix(self):
+        return (self.status().get("MagicDNSSuffix") or "").strip(".").lower()
+
+    def web_address(self):
+        """This machine's Panes Web address, as published by tailscale serve."""
+        dns = ((self.status().get("Self") or {}).get("DNSName") or "").rstrip(".")
+        return f"https://{dns}:{WEB_TLS_PORT}" if dns else None
 
     def allowed(self, ip):
         if is_loopback(ip):
@@ -237,10 +262,11 @@ def strip_field_codes(command):
 class Xpra:
     """One Xpra session per app tab, kept running between connections like a
     tmux session: the phone reattaches to the same running app. Each session
-    listens only on the address the phone reached this box on, behind a random
-    password that only that phone tab is told."""
+    listens on 127.0.0.1 only, behind a random password that only that tab is
+    told; clients reach it through the web server's /xpra/<session>/ proxy."""
 
     PORTS = range(14500, 14600)
+    HOST = "127.0.0.1"
     SECRETS = os.path.expanduser("~/.local/share/panes/sessions")
 
     # Xpra's browser client: the distro's copy, or the release Panes installs
@@ -275,12 +301,13 @@ class Xpra:
                     return port
         raise OSError("no free port for an app session")
 
-    def launch(self, name, app, host):
+    def launch(self, name, app):
         live = self.sessions.get(name)
         if live and live["proc"].poll() is None and live["app"] == app["id"]:
             return live
         if live:
             self.end(name)
+        host = self.HOST
         port = self._free_port(host)
         password = secrets.token_urlsafe(18)
         # The password goes in a file only this user can read, not on the
@@ -299,8 +326,8 @@ class Xpra:
                "--webcam=no", "--printing=no", "--file-transfer=no", "--dpi=144"]
         log = open(os.path.expanduser(f"~/.local/share/panes/xpra-{name}.log"), "ab")
         proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-        session = {"port": port, "password": password, "proc": proc, "app": app["id"], "host": host,
-                   "pw_file": pw_file}
+        session = {"name": name, "port": port, "password": password, "proc": proc, "app": app["id"],
+                   "host": host, "pw_file": pw_file}
         self.sessions[name] = session
         return session
 
@@ -338,11 +365,9 @@ class Xpra:
 
     @staticmethod
     def url(session, sound=False):
-        host = session["host"]
-        if ":" in host:
-            host = f"[{host}]"
         # Xpra's own web client, told to connect straight away with its password.
-        return (f"http://{host}:{session['port']}/index.html?password={session['password']}"
+        # Relative: clients resolve it against the machine's web address (hello's "web").
+        return (f"/xpra/{session['name']}/index.html?password={session['password']}"
                 f"&submit=true&sound={'true' if sound else 'false'}&floating_menu=false&clipboard=true&swap_keys=false")
 
 
@@ -354,29 +379,201 @@ def kill_tmux_session(name):
         subprocess.run(["tmux", "kill-session", "-t", f"={session_name(name)}"], capture_output=True)
 
 
+# ---- WebSocket (RFC 6455) --------------------------------------------------
+
+WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+WS_CONT, WS_TEXT, WS_BINARY, WS_CLOSE, WS_PING, WS_PONG = 0, 1, 2, 8, 9, 10
+
+
+def ws_accept_key(key):
+    """Sec-WebSocket-Accept for a client's Sec-WebSocket-Key."""
+    return base64.b64encode(hashlib.sha1((key + WS_GUID).encode()).digest()).decode()
+
+
+def ws_mask(data, key):
+    """XORs data with the 4-byte masking key (masking and unmasking are the same)."""
+    n = len(data)
+    if not n:
+        return b""
+    pad = (key * (n // 4 + 1))[:n]
+    return (int.from_bytes(data, "big") ^ int.from_bytes(pad, "big")).to_bytes(n, "big")
+
+
+def ws_frame(opcode, payload, fin=True, mask=None):
+    """One frame. Servers send unmasked; clients pass a 4-byte mask."""
+    head = bytes([(0x80 if fin else 0) | opcode])
+    bit = 0x80 if mask else 0
+    n = len(payload)
+    if n < 126:
+        head += bytes([bit | n])
+    elif n < 65536:
+        head += bytes([bit | 126]) + struct.pack(">H", n)
+    else:
+        head += bytes([bit | 127]) + struct.pack(">Q", n)
+    if mask:
+        return head + mask + ws_mask(payload, mask)
+    return head + payload
+
+
+class WsError(Exception):
+    """Breaks the protocol; the connection closes with this status code."""
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
+async def ws_read_frame(reader, max_size, masked=True):
+    """(fin, opcode, payload) of the next frame. Frames from a client must be
+    masked, frames from a server must not be."""
+    b0, b1 = await reader.readexactly(2)
+    fin, opcode = bool(b0 & 0x80), b0 & 0x0F
+    if b0 & 0x70 or opcode not in (WS_CONT, WS_TEXT, WS_BINARY, WS_CLOSE, WS_PING, WS_PONG):
+        raise WsError(1002)   # no extensions were negotiated
+    if bool(b1 & 0x80) != masked:
+        raise WsError(1002)
+    n = b1 & 0x7F
+    if n == 126:
+        n = struct.unpack(">H", await reader.readexactly(2))[0]
+    elif n == 127:
+        n = struct.unpack(">Q", await reader.readexactly(8))[0]
+    if opcode >= WS_CLOSE and (n > 125 or not fin):
+        raise WsError(1002)
+    if n > max_size:
+        raise WsError(1009)
+    key = await reader.readexactly(4) if masked else None
+    data = await reader.readexactly(n)
+    return fin, opcode, (ws_mask(data, key) if key else data)
+
+
+class WebSocket:
+    """One WebSocket connection after the handshake: whole messages in, frames
+    out. Answers pings and closes itself. client=True is the other end (masks
+    what it sends), used by the tests."""
+
+    def __init__(self, reader, writer, max_size=MAX_PAYLOAD + 5, client=False):
+        self.reader, self.writer = reader, writer
+        self.max_size, self.client = max_size, client
+        self.closed = False
+
+    def send(self, opcode, payload, fin=True):
+        if not self.closed and not self.writer.is_closing():
+            self.writer.write(ws_frame(opcode, payload, fin, os.urandom(4) if self.client else None))
+
+    async def recv(self):
+        """The next whole message as (opcode, bytes), or None once closed."""
+        parts, kind, size = [], None, 0
+        while True:
+            try:
+                fin, opcode, data = await ws_read_frame(self.reader, self.max_size, masked=not self.client)
+                if opcode == WS_PING:
+                    self.send(WS_PONG, data)
+                    continue
+                if opcode == WS_PONG:
+                    continue
+                if opcode == WS_CLOSE:
+                    code = struct.unpack(">H", data[:2])[0] if len(data) >= 2 else 1000
+                    self.close(code if code in (1000, 1001) else 1000)
+                    return None
+                if (opcode == WS_CONT) != (kind is not None):
+                    raise WsError(1002)   # continuation without a start, or a new start mid-message
+                kind = kind if opcode == WS_CONT else opcode
+                size += len(data)
+                if size > self.max_size:
+                    raise WsError(1009)
+                parts.append(data)
+                if fin:
+                    return kind, b"".join(parts)
+            except WsError as e:
+                self.close(e.code)
+                return None
+            except (asyncio.IncompleteReadError, ConnectionError, ValueError):
+                self.close()
+                return None
+
+    def close(self, code=1000):
+        if not self.closed:
+            self.send(WS_CLOSE, struct.pack(">H", code))
+            self.closed = True
+        self.writer.close()
+
+
 # ---- connection ------------------------------------------------------------
 
-class Session:
+class TcpTransport:
+    """Wire frames straight on a TCP stream (the phone app, port 7890)."""
+
     def __init__(self, reader, writer):
         self.reader, self.writer = reader, writer
-        self.terminal = None
+
+    async def recv(self):
+        """The next (type, payload), or None when the stream isn't speaking Wire."""
+        kind, length = struct.unpack(">BI", await self.reader.readexactly(5))
+        if kind not in (CONTROL, VIDEO_FORMAT, VIDEO_FRAME, TERMINAL) or length > MAX_PAYLOAD:
+            return None
+        return kind, await self.reader.readexactly(length)
 
     def send(self, data):
         if not self.writer.is_closing():
             self.writer.write(data)
+
+    async def drain(self):
+        await self.writer.drain()
+
+    def close(self):
+        self.writer.close()
+
+
+class WsTransport:
+    """Wire frames over a WebSocket (Panes Web): each binary message is one
+    whole frame. Text messages are ignored."""
+
+    def __init__(self, ws):
+        self.ws = ws
+
+    async def recv(self):
+        while True:
+            msg = await self.ws.recv()
+            if msg is None:
+                return None
+            opcode, data = msg
+            if opcode != WS_BINARY:
+                continue
+            if len(data) < 5:
+                return None
+            kind, length = struct.unpack(">BI", data[:5])
+            if kind not in (CONTROL, VIDEO_FORMAT, VIDEO_FRAME, TERMINAL) or length != len(data) - 5:
+                return None
+            return kind, data[5:]
+
+    def send(self, data):
+        self.ws.send(WS_BINARY, data)
+
+    async def drain(self):
+        await self.ws.writer.drain()
+
+    def close(self):
+        self.ws.close()
+
+
+class Session:
+    """One tab's connection, whichever transport carries it."""
+
+    def __init__(self, transport, peers):
+        self.transport, self.peers = transport, peers
+        self.terminal = None
+
+    def send(self, data):
+        self.transport.send(data)
 
     async def launch(self, msg):
         app = next((a for a in desktop_apps() if a["id"] == msg.get("app")), None)
         if not XPRA.available or app is None:
             self.send(control({"op": "error", "error": "That app isn't available here."}))
             return
-        # Serve the app on the address the phone reached us on (the tailnet address).
-        host = self.writer.get_extra_info("sockname")[0]
-        if host.startswith("::ffff:"):
-            host = host[7:]
         loop = asyncio.get_running_loop()
         try:
-            session = XPRA.launch(session_name(msg.get("name")), app, host)
+            session = XPRA.launch(session_name(msg.get("name")), app)
         except OSError as e:
             self.send(control({"op": "error", "error": f"Couldn't start {app['name']}: {e}"}))
             return
@@ -388,11 +585,10 @@ class Session:
     async def run(self):
         try:
             while True:
-                head = await self.reader.readexactly(5)
-                kind, length = struct.unpack(">BI", head)
-                if kind not in (CONTROL, VIDEO_FORMAT, VIDEO_FRAME, TERMINAL) or length > MAX_PAYLOAD:
+                got = await self.transport.recv()
+                if got is None:
                     break
-                payload = await self.reader.readexactly(length)
+                kind, payload = got
                 if kind == CONTROL:
                     try:
                         self.handle(json.loads(payload))
@@ -400,20 +596,23 @@ class Session:
                         pass
                 elif kind == TERMINAL and self.terminal:
                     self.terminal.write(payload)
-                await self.writer.drain()
+                await self.transport.drain()
         except (asyncio.IncompleteReadError, ConnectionError):
             pass
         finally:
             if self.terminal:
                 self.terminal.close()
-            self.writer.close()
+            self.transport.close()
 
     def handle(self, msg):
         op = msg.get("op")
         if op == "hello":
             features = ["terminal"] + (["apps"] if XPRA.available else [])
-            self.send(control({"op": "hello", "version": VERSION, "machine": socket.gethostname(),
-                               "features": features}))
+            reply = {"op": "hello", "version": VERSION, "machine": socket.gethostname(), "features": features}
+            web = self.peers.web_address()
+            if web:
+                reply["web"] = web
+            self.send(control(reply))
         elif op == "list":
             self.send(control({"op": "windows", "windows": []}))
         elif op == "apps":
@@ -449,25 +648,273 @@ class Session:
             self.terminal.resize(int(msg.get("cols") or 80), int(msg.get("rows") or 24))
 
 
+# ---- Panes Web (docs/WEB.md) -----------------------------------------------
+
+CONTENT_TYPES = {
+    ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+    ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
+    ".json": "application/json", ".map": "application/json", ".wasm": "application/wasm",
+    ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".gif": "image/gif", ".webp": "image/webp", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8",
+    ".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf",
+}
+
+# Headers that decide who's asking: a repeat of any of them is refused, not guessed at.
+SINGLE_HEADERS = ("host", "origin", "tailscale-user-login", "upgrade", "sec-websocket-key")
+
+
+def parse_request_head(head):
+    """(method, target, headers by lowercase name, raw header pairs) of an
+    HTTP/1.x request head. ValueError when it isn't one."""
+    lines = head.decode("latin-1").split("\r\n")
+    parts = lines[0].split(" ")
+    if len(parts) != 3 or not parts[2].startswith("HTTP/1.") or not parts[1].startswith("/"):
+        raise ValueError("bad request line")
+    headers, raw = {}, []
+    for line in lines[1:]:
+        if not line:
+            continue
+        name, sep, value = line.partition(":")
+        if not sep or not name or name != name.strip():
+            raise ValueError("bad header")
+        key, value = name.lower(), value.strip()
+        if key in headers and key in SINGLE_HEADERS:
+            raise ValueError(f"repeated {name}")
+        headers[key] = value
+        raw.append((name, value))
+    return parts[0], parts[1], headers, raw
+
+
+def web_request_allowed(headers, owner, port):
+    """Through tailscale serve: only the machine's owner. Straight from a
+    local process (no Tailscale header): only when addressed to loopback."""
+    login = headers.get("tailscale-user-login")
+    if login is not None:
+        return owner is not None and login == owner
+    return headers.get("host", "").lower() in (f"127.0.0.1:{port}", f"localhost:{port}")
+
+
+def web_origin_allowed(origin, suffix, port):
+    """For WebSocket upgrades: only our own pages, so other sites open in the
+    browser can't drive this machine."""
+    if not origin:
+        return False
+    if origin in (f"http://127.0.0.1:{port}", f"http://localhost:{port}"):
+        return True
+    try:
+        u = urllib.parse.urlsplit(origin)
+        host, tls_port = u.hostname or "", u.port
+    except ValueError:
+        return False
+    if u.scheme != "https" or tls_port != WEB_TLS_PORT or u.username or u.password or u.path or u.query:
+        return False
+    return bool(suffix) and host.endswith("." + suffix) and len(host) > len(suffix) + 1
+
+
+def static_path(root, path):
+    """The file under root that a URL path names, or None (missing, or outside root)."""
+    path = urllib.parse.unquote(path)
+    if "\0" in path:
+        return None
+    if path == "/":
+        path = "/index.html"
+    root = os.path.realpath(root)
+    full = os.path.realpath(os.path.join(root, path.lstrip("/")))
+    if os.path.commonpath([root, full]) != root or not os.path.isfile(full):
+        return None
+    return full
+
+
+def response(status, reason, body=b"", ctype="text/plain; charset=utf-8", extra=()):
+    head = [f"HTTP/1.1 {status} {reason}", f"Content-Type: {ctype}", f"Content-Length: {len(body)}",
+            "Connection: close", *extra]
+    return ("\r\n".join(head) + "\r\n\r\n").encode("latin-1") + body
+
+
+async def pipe(reader, writer):
+    """Copies until EOF, then passes the EOF on."""
+    try:
+        while True:
+            data = await reader.read(65536)
+            if not data:
+                break
+            writer.write(data)
+            await writer.drain()
+    except (ConnectionError, OSError):
+        pass
+    finally:
+        try:
+            if writer.can_write_eof() and not writer.is_closing():
+                writer.write_eof()
+            else:
+                writer.close()
+        except (OSError, RuntimeError):
+            writer.close()
+
+
+class WebServer:
+    """HTTP on loopback: the web client's files, /ws for tabs, /xpra/<session>/
+    for app tabs. One request per connection."""
+
+    def __init__(self, port, peers, xpra, root):
+        self.port, self.peers, self.xpra, self.root = port, peers, xpra, root
+
+    async def handle(self, reader, writer):
+        try:
+            try:
+                head = await reader.readuntil(b"\r\n\r\n")
+                method, target, headers, raw = parse_request_head(head)
+            except (asyncio.IncompleteReadError, asyncio.LimitOverrunError, ConnectionError):
+                return
+            except ValueError:
+                writer.write(response(400, "Bad Request", b"Bad request\n"))
+                return
+            loop = asyncio.get_running_loop()
+            owner = None
+            if "tailscale-user-login" in headers:
+                owner = await loop.run_in_executor(None, self.peers.owner_login)
+            if not web_request_allowed(headers, owner, self.port):
+                print(f"web refused {headers.get('tailscale-user-login') or headers.get('host')}", flush=True)
+                writer.write(response(403, "Forbidden", b"Forbidden\n"))
+                return
+            upgrade = headers.get("upgrade", "").lower() == "websocket"
+            if upgrade:
+                suffix = await loop.run_in_executor(None, self.peers.magic_dns_suffix)
+                if not web_origin_allowed(headers.get("origin"), suffix, self.port):
+                    print(f"web refused origin {headers.get('origin')}", flush=True)
+                    writer.write(response(403, "Forbidden", b"Forbidden\n"))
+                    return
+            path, _, query = target.partition("?")
+            if path == "/ws":
+                if not upgrade:
+                    writer.write(response(426, "Upgrade Required", b"WebSocket only\n", extra=["Upgrade: websocket"]))
+                    return
+                await self.websocket(reader, writer, method, headers)
+            elif path == "/xpra" or path.startswith("/xpra/"):
+                await self.proxy(reader, writer, method, path, query, raw, upgrade)
+            else:
+                self.static(writer, method, path)
+        except (ConnectionError, OSError):
+            pass
+        finally:
+            try:
+                if not writer.is_closing():
+                    await writer.drain()
+            except (ConnectionError, OSError):
+                pass
+            writer.close()
+
+    def static(self, writer, method, path):
+        if method not in ("GET", "HEAD"):
+            writer.write(response(405, "Method Not Allowed", b"Method not allowed\n", extra=["Allow: GET, HEAD"]))
+            return
+        full = static_path(self.root, path)
+        if full is None:
+            writer.write(response(404, "Not Found", b"Not found\n"))
+            return
+        with open(full, "rb") as f:
+            body = f.read()
+        ctype = CONTENT_TYPES.get(os.path.splitext(full)[1].lower(), "application/octet-stream")
+        data = response(200, "OK", body, ctype, ["Cache-Control: no-cache", "X-Content-Type-Options: nosniff"])
+        writer.write(data[:len(data) - len(body)] if method == "HEAD" else data)
+
+    async def websocket(self, reader, writer, method, headers):
+        key = headers.get("sec-websocket-key", "")
+        try:
+            key_ok = len(base64.b64decode(key, validate=True)) == 16
+        except ValueError:
+            key_ok = False
+        if method != "GET" or headers.get("sec-websocket-version") != "13" or not key_ok \
+                or "upgrade" not in [t.strip().lower() for t in headers.get("connection", "").split(",")]:
+            writer.write(response(400, "Bad Request", b"Bad WebSocket handshake\n"))
+            return
+        writer.write(("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                      f"Sec-WebSocket-Accept: {ws_accept_key(key)}\r\n\r\n").encode())
+        sock = writer.get_extra_info("socket")
+        if sock is not None:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        await Session(WsTransport(WebSocket(reader, writer)), self.peers).run()
+
+    async def proxy(self, reader, writer, method, path, query, raw, upgrade):
+        """Forwards to a registered Xpra session's loopback port, minus the
+        /xpra/<session> prefix (Xpra's client uses its page path, /xpra/<session>/,
+        as its WebSocket path, which lands on / here). Nothing else is reachable."""
+        name, slash, sub = path[len("/xpra/"):].partition("/")
+        session = self.xpra.sessions.get(name) if name and session_name(name) == name else None
+        if session is None:
+            writer.write(response(404, "Not Found", b"No such app session\n"))
+            return
+        if not slash:
+            location = f"/xpra/{name}/" + (f"?{query}" if query else "")
+            writer.write(response(308, "Permanent Redirect", extra=[f"Location: {location}"]))
+            return
+        port = session["port"]
+        try:
+            up_reader, up_writer = await asyncio.open_connection("127.0.0.1", port)
+        except OSError:
+            writer.write(response(502, "Bad Gateway", b"App session isn't answering\n"))
+            return
+        try:
+            target = "/" + sub + (f"?{query}" if query else "")
+            hop = ("host", "connection", "keep-alive", "proxy-connection", "upgrade", "te", "trailer")
+            lines = [f"{method} {target} HTTP/1.1", f"Host: 127.0.0.1:{port}"]
+            lines += [f"{n}: {v}" for n, v in raw if n.lower() not in hop and not n.lower().startswith("tailscale-")]
+            lines += ["Connection: Upgrade", "Upgrade: websocket"] if upgrade else ["Connection: close"]
+            up_writer.write(("\r\n".join(lines) + "\r\n\r\n").encode("latin-1"))
+            # The request body (if any) and, after a 101, WebSocket bytes flow
+            # this way until the browser hangs up.
+            outbound = asyncio.ensure_future(pipe(reader, up_writer))
+            try:
+                reply = await up_reader.readuntil(b"\r\n\r\n")
+            except (asyncio.IncompleteReadError, asyncio.LimitOverrunError, ConnectionError):
+                outbound.cancel()
+                writer.write(response(502, "Bad Gateway", b"Bad reply from the app session\n"))
+                return
+            status_line, *rest = reply.decode("latin-1").split("\r\n")
+            if status_line.split(" ")[1:2] != ["101"]:
+                # One response per connection: make sure the browser knows.
+                rest = [h for h in rest if h and h.split(":", 1)[0].strip().lower() not in ("connection", "keep-alive")]
+                reply = ("\r\n".join([status_line, *rest, "Connection: close"]) + "\r\n\r\n").encode("latin-1")
+            writer.write(reply)
+            await pipe(up_reader, writer)
+            outbound.cancel()
+        finally:
+            up_writer.close()
+
+
+async def start_web(port, peers, xpra, root, host="127.0.0.1"):
+    """Starts the web server; port 0 picks one (tests). Returns the asyncio server."""
+    web = WebServer(port, peers, xpra, root)
+    server = await asyncio.start_server(web.handle, host=host, port=port)
+    web.port = server.sockets[0].getsockname()[1]
+    return server
+
+
 async def main():
     port = int(os.environ.get("PANES_PORT", "7890"))
+    web_port = int(os.environ.get("PANES_WEB_PORT", str(WEB_PORT)))
+    web_dir = os.environ.get("PANES_WEB_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
     peers = Peers()
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, peers.status)   # so hello doesn't wait on tailscale
 
     async def accept(reader, writer):
         ip = (writer.get_extra_info("peername") or ("",))[0]
-        allowed = await asyncio.get_running_loop().run_in_executor(None, peers.allowed, ip)
+        allowed = await loop.run_in_executor(None, peers.allowed, ip)
         if not allowed:
             writer.close()
             return
         sock = writer.get_extra_info("socket")
         if sock is not None:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        await Session(reader, writer).run()
+        await Session(TcpTransport(reader, writer), peers).run()
 
     server = await asyncio.start_server(accept, host=None, port=port)
-    print(f"Panes agent listening on {port}", flush=True)
-    async with server:
-        await server.serve_forever()
+    # Loopback only: tailscale serve publishes it to the tailnet as HTTPS.
+    web = await start_web(web_port, peers, XPRA, web_dir)
+    print(f"Panes agent listening on {port}, web on 127.0.0.1:{web_port} ({web_dir})", flush=True)
+    async with server, web:
+        await asyncio.gather(server.serve_forever(), web.serve_forever())
 
 
 if __name__ == "__main__":
