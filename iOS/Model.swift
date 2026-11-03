@@ -9,16 +9,20 @@ struct Machine: Identifiable, Hashable, Codable {
     /// Tried in order: the Tailscale name, its Tailscale address, then the
     /// home-network address.
     var hosts: [String]
+    /// Its Panes Web address, which Linux app tabs load through.
+    var web: String?
 
+    /// From Shared/machines.json, the same list Panes Web uses.
     static let defaults: [Machine] = {
         // Tests point the app at agents on this Mac with PANES_HOSTS=127.0.0.1.
         if let hosts = ProcessInfo.processInfo.environment["PANES_HOSTS"] {
-            return [Machine(name: "Mac mini", hosts: hosts.split(separator: ",").map(String.init))]
+            return [Machine(name: "Mac mini", hosts: hosts.split(separator: ",").map(String.init),
+                            web: ProcessInfo.processInfo.environment["PANES_WEB"])]
         }
-        return [
-            Machine(name: "Mac mini", hosts: ["my-mac-mini", "100.64.0.10", "192.168.1.10"]),
-            Machine(name: "linux-box", hosts: ["linux-box", "100.64.0.20"]),
-        ]
+        guard let url = Bundle.main.url(forResource: "machines", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let list = try? JSONDecoder().decode([Machine].self, from: data), !list.isEmpty else { return [] }
+        return list
     }()
 }
 
@@ -66,6 +70,7 @@ final class PaneTab: ObservableObject, Identifiable {
         return v
     }()
     private var appURL: URL?
+    private var webAddress: String?
 
     var viewport: CGSize = CGSize(width: 393, height: 700)
     private let audio = AudioPlayer()
@@ -175,6 +180,8 @@ final class PaneTab: ObservableObject, Identifiable {
             }
         case .control(let msg):
             switch msg.op {
+            case "hello":
+                webAddress = msg.web
             case "opened":
                 status = .live
                 if let t = msg.title, !t.isEmpty { title = t }
@@ -184,9 +191,11 @@ final class PaneTab: ObservableObject, Identifiable {
             case "launched":
                 status = .live
                 // Same session as before (a reconnect) keeps the page as it is.
-                // The phone's own keyboard is used (via the Panes keyboard button),
-                // so Xpra's on-screen one stays hidden.
-                if let u = msg.url.flatMap({ URL(string: $0 + "&keyboard=false") }), u != appURL {
+                // Newer agents send a path on the machine's Panes Web address; the
+                // phone's own keyboard is used, so Xpra's on-screen one stays hidden.
+                let base = (webAddress ?? machine.web).flatMap(URL.init(string:))
+                if let u = msg.url.flatMap({ URL(string: $0 + "&keyboard=false", relativeTo: base)?.absoluteURL }),
+                   u != appURL {
                     appURL = u
                     webView.load(URLRequest(url: u))
                 }

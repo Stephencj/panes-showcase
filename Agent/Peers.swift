@@ -7,7 +7,6 @@ import Foundation
 final class Peers {
     private let tailscale: String
     private var cache: [String: (allowed: Bool, at: Date)] = [:]
-    private var owner: String?
     private let lock = NSLock()
 
     init() {
@@ -52,17 +51,54 @@ final class Peers {
         return ok
     }
 
-    private func ownerLogin() -> String? {
-        lock.lock(); let known = owner; lock.unlock()
-        if let known { return known }
-        guard let json = run([tailscale, "status", "--json"]),
-              let me = json["Self"] as? [String: Any],
-              let uid = me["UserID"] as? NSNumber,
-              let users = json["User"] as? [String: Any],
-              let user = users[uid.stringValue] as? [String: Any],
-              let login = user["LoginName"] as? String else { return nil }
-        lock.lock(); owner = login; lock.unlock()
-        return login
+    /// This machine's owner (Tailscale login), tailnet DNS suffix and own DNS name.
+    struct Identity { var owner: String?; var suffix: String?; var dnsName: String? }
+    private var identityCache: Identity?
+
+    func identity() -> Identity {
+        lock.lock(); let known = identityCache; lock.unlock()
+        if let known, known.owner != nil { return known }
+        var id = Identity()
+        if let json = run([tailscale, "status", "--json"]) {
+            let me = json["Self"] as? [String: Any]
+            if let uid = me?["UserID"] as? NSNumber,
+               let users = json["User"] as? [String: Any],
+               let user = users[uid.stringValue] as? [String: Any] {
+                id.owner = user["LoginName"] as? String
+            }
+            id.suffix = json["MagicDNSSuffix"] as? String
+            id.dnsName = (me?["DNSName"] as? String).map { $0.hasSuffix(".") ? String($0.dropLast()) : $0 }
+        }
+        lock.lock(); identityCache = id; lock.unlock()
+        return id
+    }
+
+    func ownerLogin() -> String? { identity().owner }
+
+    /// Where this machine's Panes Web is reached (Tailscale HTTPS on 7443).
+    func webAddress() -> String? { identity().dnsName.map { "https://\($0):\(WebHTTP.publicPort)" } }
+
+    // MARK: Panes Web access (docs/WEB.md)
+
+    /// Tailscale's proxy names the user; with no proxy, only a browser on this Mac.
+    func webRequestAllowed(login: String?, host: String?) -> Bool {
+        if let login { return login == ownerLogin() }
+        return Self.isLocalHost(host)
+    }
+
+    /// Only Panes Web pages (on the tailnet's HTTPS names, or local) may open
+    /// WebSockets, so other sites open in the same browser can't drive this Mac.
+    func webOriginAllowed(_ origin: String?) -> Bool {
+        guard let origin, let url = URL(string: origin), let host = url.host else { return false }
+        if url.scheme == "http", url.port == Int(WebHTTP.localPort), host == "127.0.0.1" || host == "localhost" {
+            return true
+        }
+        guard url.scheme == "https", url.port == Int(WebHTTP.publicPort), let suffix = identity().suffix else { return false }
+        return host.hasSuffix("." + suffix)
+    }
+
+    static func isLocalHost(_ host: String?) -> Bool {
+        host == "127.0.0.1:\(WebHTTP.localPort)" || host == "localhost:\(WebHTTP.localPort)"
     }
 
     private func login(of ip: String) -> String? {

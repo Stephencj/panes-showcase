@@ -5,7 +5,7 @@ import ScreenCaptureKit
 /// One phone tab: one connection, one window. Captures the window, encodes
 /// it, sends it, and plays the phone's input back into it.
 final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
-    private let conn: NWConnection
+    private let transport: Transport
     private let queue: DispatchQueue
     private var reader = FrameReader()
     private let input = Input()
@@ -34,54 +34,46 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
     private let inFlightLimit = 1_500_000
     private let sendLock = NSLock()
 
-    init(_ conn: NWConnection, onEnd: @escaping (Session) -> Void) {
-        self.conn = conn
+    /// The phone's raw TCP and browsers' WebSocket both arrive here; only
+    /// the transport differs. `queue` is the one the transport calls back on.
+    init(_ transport: Transport, queue: DispatchQueue, onEnd: @escaping (Session) -> Void) {
+        self.transport = transport
         self.onEnd = onEnd
-        queue = DispatchQueue(label: "panes.session")
+        self.queue = queue
         super.init()
     }
 
     func start() {
-        conn.stateUpdateHandler = { [weak self] state in
-            switch state {
-            case .failed, .cancelled: self?.queue.async { self?.end() }
-            default: break
-            }
-        }
-        conn.start(queue: queue)
-        receive()
+        transport.start(queue: queue,
+                        onBytes: { [weak self] data in self?.process(data) },
+                        onClose: { [weak self] in self?.end() })
     }
 
-    private func receive() {
-        conn.receive(minimumIncompleteLength: 1, maximumLength: 256 * 1024) { [weak self] data, _, done, error in
-            guard let self else { return }
-            if let data, !data.isEmpty {
-                do {
-                    for frame in try self.reader.push(data) {
-                        switch frame.type {
-                        case .control:
-                            if let msg = try? JSONDecoder().decode(Control.self, from: frame.payload) { self.handle(msg) }
-                        case .terminal:
-                            self.terminal?.write(frame.payload)
-                        default:
-                            break
-                        }
-                    }
-                } catch {
-                    print("bad stream: \(error)")
-                    self.end()
-                    return
+    private func process(_ data: Data) {
+        do {
+            for frame in try reader.push(data) {
+                switch frame.type {
+                case .control:
+                    if let msg = try? JSONDecoder().decode(Control.self, from: frame.payload) { handle(msg) }
+                case .terminal:
+                    terminal?.write(frame.payload)
+                default:
+                    break
                 }
             }
-            if done || error != nil { self.end() } else { self.receive() }
+        } catch {
+            print("bad stream: \(error)")
+            end()
         }
     }
 
     private func handle(_ msg: Control) {
         switch msg.op {
         case "hello":
-            send(Control(op: "hello", version: Wire.version, machine: Host.current().localizedName ?? "Mac",
-                         features: ["windows", "terminal"]))
+            var hello = Control(op: "hello", version: Wire.version, machine: Host.current().localizedName ?? "Mac",
+                                features: ["windows", "terminal"])
+            hello.web = Agent.peers.webAddress()
+            send(hello)
             if let problem = Agent.permissionProblem() { send(Control(op: "error", error: problem)) }
         case "list":
             Task {
@@ -317,7 +309,7 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
         stopCapture()
         terminal?.close()
         terminal = nil
-        conn.cancel()
+        transport.close()
         onEnd(self)
     }
 
@@ -328,10 +320,10 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
     private func sendRaw(_ data: Data) {
         let n = data.count
         sendLock.lock(); inFlight += n; sendLock.unlock()
-        conn.send(content: data, completion: .contentProcessed { [weak self] _ in
+        transport.send(data) { [weak self] in
             guard let self else { return }
             self.sendLock.lock(); self.inFlight -= n; self.sendLock.unlock()
-        })
+        }
     }
 
     private static func even(_ v: CGFloat) -> Int { max(2, Int(v.rounded()) & ~1) }
