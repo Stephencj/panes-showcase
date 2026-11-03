@@ -57,6 +57,8 @@ final class PaneTab: ObservableObject, Identifiable {
     private(set) lazy var webView: WKWebView = {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
+        config.userContentController.addUserScript(
+            WKUserScript(source: WebKeys.pageScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         let v = WKWebView(frame: .zero, configuration: config)
         v.isOpaque = false
         v.backgroundColor = .black
@@ -138,6 +140,16 @@ final class PaneTab: ObservableObject, Identifiable {
 
     func sendTerminal(_ bytes: Data) { link?.sendRaw(.terminal, bytes) }
 
+    /// App tabs: typed keys go into Xpra's page as DOM key events.
+    func sendToPage(_ e: InputEvent) {
+        let js = WebKeys.script(WebKeys.keys(for: e))
+        guard !js.isEmpty else { return }
+        webView.evaluateJavaScript("(function(){ try { \(js) return 'ok'; } catch (e) { return String(e); } })()") { result, error in
+            if let error { print("panes: key script failed: \(error)") }
+            else if let r = result as? String, r != "ok" { print("panes: key script: \(r)") }
+        }
+    }
+
     func resizeTerminal(cols: Int, rows: Int) { link?.send(Control(op: "resize", cols: cols, rows: rows)) }
 
     private func handle(_ e: AgentLink.Event) {
@@ -166,7 +178,9 @@ final class PaneTab: ObservableObject, Identifiable {
             case "launched":
                 status = .live
                 // Same session as before (a reconnect) keeps the page as it is.
-                if let u = msg.url.flatMap(URL.init(string:)), u != appURL {
+                // The phone's own keyboard is used (via the Panes keyboard button),
+                // so Xpra's on-screen one stays hidden.
+                if let u = msg.url.flatMap({ URL(string: $0 + "&keyboard=false") }), u != appURL {
                     appURL = u
                     webView.load(URLRequest(url: u))
                 }
