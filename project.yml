@@ -49,7 +49,14 @@ targets:
     type: application
     platform: macOS
     deploymentTarget: "14.0"
-    sources: [Shared, Agent]
+    sources:
+      - Shared
+      - Agent
+      # Panes Web: the browser client, served by the agent (docs/WEB.md).
+      - path: web
+        type: folder
+        buildPhase: resources
+        optional: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.stephencjuliano.panes.agent
@@ -84,6 +91,7 @@ targets:
       - Agent/Encoder.swift
       - Agent/AudioEncoder.swift
       - Agent/Peers.swift
+      - Agent/WebHTTP.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.stephencjuliano.panes.tests

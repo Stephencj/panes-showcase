@@ -22,8 +22,22 @@ enum Agent {
             print("can't listen on \(Wire.port): \(error)")
             exit(1)
         }
+        do {
+            try WebServer.listen()
+        } catch {
+            print("Panes Web unavailable: \(error)")   // the phone app still works
+        }
         if let problem = permissionProblem() { print(problem) }
         app.run()
+    }
+
+    /// Keeps a Session alive until it ends, whichever way it arrived.
+    static func startSession(_ transport: Transport, queue: DispatchQueue) {
+        let session = Session(transport, queue: queue) { s in
+            lock.lock(); sessions[ObjectIdentifier(s)] = nil; lock.unlock()
+        }
+        lock.lock(); sessions[ObjectIdentifier(session)] = session; lock.unlock()
+        session.start()
     }
 
     static func permissionProblem() -> String? {
@@ -47,11 +61,7 @@ enum Agent {
                     conn.cancel()
                     return
                 }
-                let session = Session(conn) { s in
-                    lock.lock(); sessions[ObjectIdentifier(s)] = nil; lock.unlock()
-                }
-                lock.lock(); sessions[ObjectIdentifier(session)] = session; lock.unlock()
-                session.start()
+                startSession(TCPTransport(conn), queue: DispatchQueue(label: "panes.session"))
             }
         }
         listener.stateUpdateHandler = { state in

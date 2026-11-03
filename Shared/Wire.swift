@@ -180,6 +180,9 @@ struct Control: Codable, Equatable {
     /// Linux app tabs: the apps a box offers, and where a launched one is served.
     var apps: [AppInfo]? = nil
     var url: String? = nil
+    /// The machine's Panes Web address (https://<name>.<tailnet>.ts.net:7443),
+    /// which a relative `url` resolves against.
+    var web: String? = nil
 }
 
 /// An app a Linux box can start in its own Xpra session (from its .desktop file).

@@ -56,5 +56,11 @@ cat > "$PLIST" <<EOF
 </plist>
 EOF
 launchctl bootstrap "$DOMAIN" "$PLIST"
+
+# Panes Web: publish the agent's local web server on the tailnet over HTTPS
+# (browsers need HTTPS for video decoding). Other serve entries are left alone.
+if ! tailscale serve status 2>/dev/null | grep -q ':7443'; then
+    tailscale serve --bg --https=7443 http://127.0.0.1:7891 >/dev/null && echo "Panes Web: https on port 7443 via tailscale serve"
+fi
 sleep 2
 tail -3 "$LOG"

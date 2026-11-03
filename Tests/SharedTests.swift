@@ -263,3 +263,91 @@ extension FrameReader {
         return try r.push(data)[0].payload
     }
 }
+
+final class WebSocketTests: XCTestCase {
+    func testAcceptKeyMatchesTheRFCExample() {
+        XCTAssertEqual(WebSocket.acceptKey("dGhlIHNhbXBsZSBub25jZQ=="), "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
+    }
+
+    func testMaskedClientFramesOfEverySizeComeBack() throws {
+        for size in [0, 5, 125, 126, 300, 65_535, 65_536, 200_000] {
+            let payload = Data((0..<size).map { UInt8($0 % 251) })
+            var reader = WebSocket.Reader()
+            var got: [(WebSocket.Opcode, Data)] = []
+            let bytes = WebSocket.frame(.binary, payload, mask: [1, 2, 3, 4])
+            for chunk in stride(from: 0, to: bytes.count, by: 997) {
+                got += try reader.push(bytes.subdata(in: chunk..<min(chunk + 997, bytes.count)))
+            }
+            XCTAssertEqual(got.count, 1, "size \(size)")
+            XCTAssertEqual(got.first?.1, payload, "size \(size)")
+        }
+    }
+
+    func testFragmentsAreJoinedAndControlFramesPassThrough() throws {
+        var first = WebSocket.frame(.binary, Data([1, 2]), mask: [9, 9, 9, 9])
+        first[0] &= 0x7F   // not final
+        let ping = WebSocket.frame(.ping, Data([7]), mask: [1, 1, 1, 1])
+        let last = WebSocket.frame(.continuation, Data([3]), mask: [5, 6, 7, 8])
+        var reader = WebSocket.Reader()
+        let got = try reader.push(first + ping + last)
+        XCTAssertEqual(got.map(\.0), [.ping, .binary])
+        XCTAssertEqual(got[1].1, Data([1, 2, 3]))
+    }
+
+    func testUnmaskedAndOversizedClientFramesAreRefused() {
+        var r1 = WebSocket.Reader()
+        XCTAssertThrowsError(try r1.push(WebSocket.frame(.binary, Data([1]))))
+        var r2 = WebSocket.Reader(maxMessage: 10)
+        XCTAssertThrowsError(try r2.push(WebSocket.frame(.binary, Data(count: 11), mask: [1, 2, 3, 4])))
+    }
+}
+
+final class WebServerTests: XCTestCase {
+    func testRequestHeadersParse() {
+        let r = WebHTTP.Request("GET /ws?x=1 HTTP/1.1\r\nHost: 127.0.0.1:7891\r\nUpgrade: websocket\r\nSec-WebSocket-Key: abc\r\nTailscale-User-Login: me@x")
+        XCTAssertEqual(r.method, "GET")
+        XCTAssertEqual(r.path, "/ws?x=1")
+        XCTAssertEqual(r.headers["tailscale-user-login"], "me@x")
+        XCTAssertTrue(r.isWebSocketUpgrade)
+    }
+
+    func testStaticFilesStayInsideTheirFolder() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("panes-web-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("vendor"), withIntermediateDirectories: true)
+        try Data("<html>".utf8).write(to: root.appendingPathComponent("index.html"))
+        try Data("x".utf8).write(to: root.appendingPathComponent("vendor/a.js"))
+        defer { try? FileManager.default.removeItem(at: root) }
+        XCTAssertEqual(WebHTTP.staticFile("/", root: root)?.lastPathComponent, "index.html")
+        XCTAssertEqual(WebHTTP.staticFile("/vendor/a.js", root: root)?.lastPathComponent, "a.js")
+        XCTAssertNil(WebHTTP.staticFile("/../../etc/passwd", root: root))
+        XCTAssertNil(WebHTTP.staticFile("/%2e%2e/%2e%2e/etc/passwd", root: root))
+        XCTAssertNil(WebHTTP.staticFile("/vendor", root: root), "folders aren't files")
+        XCTAssertNil(WebHTTP.staticFile("/missing.js", root: root))
+        XCTAssertEqual(WebHTTP.contentType("js"), "text/javascript; charset=utf-8")
+    }
+
+    func testOnlyLocalHostsPassWithoutTailscaleIdentity() {
+        XCTAssertTrue(Peers.isLocalHost("127.0.0.1:7891"))
+        XCTAssertTrue(Peers.isLocalHost("localhost:7891"))
+        XCTAssertFalse(Peers.isLocalHost("evil.example:7891"))
+        XCTAssertFalse(Peers.isLocalHost(nil))
+        let p = Peers()
+        XCTAssertTrue(p.webRequestAllowed(login: nil, host: "127.0.0.1:7891"))
+        XCTAssertFalse(p.webRequestAllowed(login: nil, host: "my-mac-mini.tailnet-example.ts.net:7443"))
+        XCTAssertFalse(p.webRequestAllowed(login: "someone-else@example.com", host: "127.0.0.1:7891"))
+    }
+
+    func testOnlyPanesWebPagesMayOpenWebSockets() {
+        let p = Peers()
+        XCTAssertTrue(p.webOriginAllowed("http://127.0.0.1:7891"))
+        XCTAssertTrue(p.webOriginAllowed("http://localhost:7891"))
+        XCTAssertFalse(p.webOriginAllowed("https://evil.example"))
+        XCTAssertFalse(p.webOriginAllowed("http://127.0.0.1:8000"))
+        XCTAssertFalse(p.webOriginAllowed(nil))
+        if let suffix = p.identity().suffix {   // needs this Mac's Tailscale
+            XCTAssertTrue(p.webOriginAllowed("https://linux-box.\(suffix):7443"))
+            XCTAssertFalse(p.webOriginAllowed("https://linux-box.\(suffix):443"))
+            XCTAssertFalse(p.webOriginAllowed("https://evil.\(suffix).example.com:7443"))
+        }
+    }
+}
