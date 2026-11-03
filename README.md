@@ -33,6 +33,12 @@ login. The first time, allow **Panes Agent** in System Settings → Privacy &
 Security → **Screen Recording** and **Accessibility**. Logs go to
 `~/Library/Logs/panes-agent.log`.
 
+## Linux setup
+
+Copy `linux/` to the box and run `bash install.sh` there. It installs a systemd
+user service listening on 7890 with the same access rule (tailnet devices of
+the same owner). Terminal tabs need nothing else; tmux makes them persistent.
+
 ## Tests
 
     xcodegen && xcodebuild -scheme PanesAgent -destination 'platform=macOS' test
