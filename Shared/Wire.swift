@@ -107,10 +107,11 @@ struct FrameReader {
 /// Every JSON message. `op` says which fields matter:
 ///
 /// phone → agent: hello, list, open(windowID, viewport, zoom), input(event),
-///                keyframe, pause, resume, terminal(name, cols, rows), resize(cols, rows)
+///                keyframe, pause, resume, terminal(name, cols, rows), resize(cols, rows),
+///                apps, launch(app, name)
 /// agent → phone: hello(machine, features), windows(windows), opened(windowID,
 ///                title, app, width, height), resized(width, height), closed,
-///                terminalOpened(name), exited, error
+///                terminalOpened(name), exited, apps(apps), launched(app, url), error
 struct Control: Codable, Equatable {
     var op: String
     var version: Int? = nil
@@ -126,12 +127,21 @@ struct Control: Codable, Equatable {
     var height: Double? = nil
     var event: InputEvent? = nil
     var error: String? = nil
-    /// What a machine's agent can do: "windows", "terminal".
+    /// What a machine's agent can do: "windows", "terminal", "apps".
     var features: [String]? = nil
     /// Terminal tabs: the tmux session to attach (created if missing), and the size in cells.
     var name: String? = nil
     var cols: Int? = nil
     var rows: Int? = nil
+    /// Linux app tabs: the apps a box offers, and where a launched one is served.
+    var apps: [AppInfo]? = nil
+    var url: String? = nil
+}
+
+/// An app a Linux box can start in its own Xpra session (from its .desktop file).
+struct AppInfo: Codable, Equatable, Identifiable, Hashable {
+    var id: String
+    var name: String
 }
 
 extension Wire {

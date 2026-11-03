@@ -8,7 +8,10 @@ per tab, frames of [type u8][length u32 big-endian][payload].
     python3 panes_agent.py            # port 7890, or PANES_PORT
 """
 import asyncio
+import configparser
 import fcntl
+import glob
+import secrets
 import json
 import os
 import pty
@@ -193,6 +196,109 @@ class Terminal:
             pass
 
 
+# ---- app windows (Xpra) ----------------------------------------------------
+
+def desktop_apps(dirs=None):
+    """Launchable apps from .desktop files: id, name, command."""
+    dirs = dirs or ["/usr/share/applications", "/usr/local/share/applications",
+                    os.path.expanduser("~/.local/share/applications"),
+                    "/var/lib/flatpak/exports/share/applications",
+                    os.path.expanduser("~/.local/share/flatpak/exports/share/applications")]
+    apps = {}
+    for d in dirs:
+        for path in sorted(glob.glob(os.path.join(d, "*.desktop"))):
+            cp = configparser.ConfigParser(interpolation=None, strict=False)
+            try:
+                cp.read(path, encoding="utf-8")
+                e = cp["Desktop Entry"]
+            except (configparser.Error, KeyError, UnicodeDecodeError):
+                continue
+            if e.get("Type") != "Application" or e.get("NoDisplay", "").lower() == "true" \
+                    or e.get("Hidden", "").lower() == "true" or e.get("Terminal", "").lower() == "true":
+                continue
+            command = strip_field_codes(e.get("Exec", ""))
+            if not command or not e.get("Name"):
+                continue
+            app_id = os.path.basename(path)[:-len(".desktop")]
+            apps[app_id] = {"id": app_id, "name": e.get("Name"), "command": command}
+    return sorted(apps.values(), key=lambda a: a["name"].lower())
+
+
+def strip_field_codes(command):
+    """Drops %f, %U and friends from a desktop Exec line (no file is being opened)."""
+    return re.sub(r"\s*%[a-zA-Z]", "", command).replace("%%", "%").strip()
+
+
+class Xpra:
+    """One Xpra session per app tab, kept running between connections like a
+    tmux session: the phone reattaches to the same running app. Each session
+    listens only on the address the phone reached this box on, behind a random
+    password that only that phone tab is told."""
+
+    PORTS = range(14500, 14600)
+
+    def __init__(self):
+        self.binary = shutil.which("xpra")
+        self.sessions = {}   # name -> dict(port, password, proc, app)
+
+    @property
+    def available(self):
+        return self.binary is not None
+
+    def _free_port(self, host):
+        used = {s["port"] for s in self.sessions.values()}
+        for port in self.PORTS:
+            if port in used:
+                continue
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                if probe.connect_ex((host, port)) != 0:
+                    return port
+        raise OSError("no free port for an app session")
+
+    def launch(self, name, app, host):
+        live = self.sessions.get(name)
+        if live and live["proc"].poll() is None and live["app"] == app["id"]:
+            return live
+        port = self._free_port(host)
+        password = secrets.token_urlsafe(18)
+        display = f":{100 + port - self.PORTS.start}"
+        cmd = [self.binary, "start", display, "--daemon=no",
+               f"--start-child={app['command']}", "--exit-with-children=yes",
+               f"--bind-tcp={host}:{port}", f"--tcp-auth=password:value={password}",
+               "--html=on", "--mdns=no", "--notifications=no", "--speaker=off", "--microphone=off",
+               "--webcam=no", "--printing=no", "--file-transfer=no", "--dpi=144"]
+        log = open(os.path.expanduser(f"~/.local/share/panes/xpra-{name}.log"), "ab")
+        proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+        session = {"port": port, "password": password, "proc": proc, "app": app["id"], "host": host}
+        self.sessions[name] = session
+        return session
+
+    def ready(self, session, timeout=20.0):
+        """Waits until the session's web client answers."""
+        end = time.time() + timeout
+        while time.time() < end:
+            if session["proc"].poll() is not None:
+                return False
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                probe.settimeout(0.5)
+                if probe.connect_ex((session["host"], session["port"])) == 0:
+                    return True
+            time.sleep(0.25)
+        return False
+
+    @staticmethod
+    def url(session):
+        host = session["host"]
+        if ":" in host:
+            host = f"[{host}]"
+        # Xpra's own web client, told to connect straight away with its password.
+        return (f"http://{host}:{session['port']}/index.html?password={session['password']}"
+                "&submit=true&sound=false&floating_menu=false&clipboard=true&swap_keys=false")
+
+
+XPRA = Xpra()
+
+
 # ---- connection ------------------------------------------------------------
 
 class Session:
@@ -203,6 +309,26 @@ class Session:
     def send(self, data):
         if not self.writer.is_closing():
             self.writer.write(data)
+
+    async def launch(self, msg):
+        app = next((a for a in desktop_apps() if a["id"] == msg.get("app")), None)
+        if not XPRA.available or app is None:
+            self.send(control({"op": "error", "error": "That app isn't available here."}))
+            return
+        # Serve the app on the address the phone reached us on (the tailnet address).
+        host = self.writer.get_extra_info("sockname")[0]
+        if host.startswith("::ffff:"):
+            host = host[7:]
+        loop = asyncio.get_running_loop()
+        try:
+            session = XPRA.launch(session_name(msg.get("name")), app, host)
+        except OSError as e:
+            self.send(control({"op": "error", "error": f"Couldn't start {app['name']}: {e}"}))
+            return
+        if not await loop.run_in_executor(None, XPRA.ready, session):
+            self.send(control({"op": "error", "error": f"{app['name']} didn't start (see xpra log on the box)."}))
+            return
+        self.send(control({"op": "launched", "app": app["name"], "url": Xpra.url(session)}))
 
     async def run(self):
         try:
@@ -230,10 +356,16 @@ class Session:
     def handle(self, msg):
         op = msg.get("op")
         if op == "hello":
+            features = ["terminal"] + (["apps"] if XPRA.available else [])
             self.send(control({"op": "hello", "version": VERSION, "machine": socket.gethostname(),
-                               "features": ["terminal"]}))
+                               "features": features}))
         elif op == "list":
             self.send(control({"op": "windows", "windows": []}))
+        elif op == "apps":
+            apps = desktop_apps() if XPRA.available else []
+            self.send(control({"op": "apps", "apps": [{"id": a["id"], "name": a["name"]} for a in apps]}))
+        elif op == "launch":
+            asyncio.ensure_future(self.launch(msg))
         elif op == "terminal":
             if self.terminal:
                 self.terminal.close()

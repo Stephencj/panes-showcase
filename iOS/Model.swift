@@ -1,6 +1,7 @@
 import AVFoundation
 import SwiftTerm
 import SwiftUI
+import WebKit
 
 struct Machine: Identifiable, Hashable, Codable {
     var id: String { name }
@@ -29,6 +30,8 @@ final class PaneTab: ObservableObject, Identifiable {
         case window(WindowInfo)
         /// The tmux session it attaches to, so a reconnect finds the same programs.
         case terminal(session: String)
+        /// A Linux app in its own Xpra session (named like a tmux session, same idea).
+        case app(AppInfo, session: String)
     }
 
     let id = UUID()
@@ -50,6 +53,17 @@ final class PaneTab: ObservableObject, Identifiable {
         return v
     }()
     private lazy var terminalBridge = TerminalBridge(tab: self)
+    /// App tabs show Xpra's web client; the view stays with the tab.
+    private(set) lazy var webView: WKWebView = {
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .nonPersistent()
+        let v = WKWebView(frame: .zero, configuration: config)
+        v.isOpaque = false
+        v.backgroundColor = .black
+        v.scrollView.isScrollEnabled = false
+        return v
+    }()
+    private var appURL: URL?
 
     var viewport: CGSize = CGSize(width: 393, height: 700)
     private var link: AgentLink?
@@ -61,6 +75,7 @@ final class PaneTab: ObservableObject, Identifiable {
         switch kind {
         case .window(let w): w.app
         case .terminal: "Terminal"
+        case .app(let a, _): a.name
         }
     }
 
@@ -74,6 +89,9 @@ final class PaneTab: ObservableObject, Identifiable {
             windowSize = CGSize(width: w.width, height: w.height)
         case .terminal:
             title = "Terminal"
+            windowSize = .zero
+        case .app(let a, _):
+            title = a.name
             windowSize = .zero
         }
         renderer.videoGravity = .resizeAspect
@@ -123,6 +141,8 @@ final class PaneTab: ObservableObject, Identifiable {
             case .terminal(let session):
                 let t = terminalView.getTerminal()
                 link?.send(Control(op: "terminal", name: session, cols: t.cols, rows: t.rows))
+            case .app(let a, let session):
+                link?.send(Control(op: "launch", app: a.id, name: session))
             }
         case .control(let msg):
             switch msg.op {
@@ -134,6 +154,13 @@ final class PaneTab: ObservableObject, Identifiable {
                 if let w = msg.width, let h = msg.height { windowSize = CGSize(width: w, height: h) }
             case "terminalOpened":
                 status = .live
+            case "launched":
+                status = .live
+                // Same session as before (a reconnect) keeps the page as it is.
+                if let u = msg.url.flatMap(URL.init(string:)), u != appURL {
+                    appURL = u
+                    webView.load(URLRequest(url: u))
+                }
             case "exited":
                 status = .failed("The shell exited.")
             case "resized":
@@ -210,9 +237,14 @@ final class Store: ObservableObject {
     }
 
     func openTerminal(on machine: Machine) {
-        let session = "panes-" + UUID().uuidString.prefix(6).lowercased()
-        add(PaneTab(machine: machine, kind: .terminal(session: session)), viewport: .zero)
+        add(PaneTab(machine: machine, kind: .terminal(session: Self.newSessionName())), viewport: .zero)
     }
+
+    func openApp(_ app: AppInfo, on machine: Machine) {
+        add(PaneTab(machine: machine, kind: .app(app, session: Self.newSessionName())), viewport: .zero)
+    }
+
+    private static func newSessionName() -> String { "panes-" + UUID().uuidString.prefix(6).lowercased() }
 
     private func add(_ tab: PaneTab, viewport: CGSize) {
         tab.viewport = viewport
@@ -244,6 +276,7 @@ final class Store: ObservableObject {
 @MainActor
 final class WindowList: ObservableObject {
     @Published var windows: [WindowInfo] = []
+    @Published var apps: [AppInfo] = []
     @Published var features: [String] = []
     @Published var loading = false
     @Published var problem: String?
@@ -254,6 +287,7 @@ final class WindowList: ObservableObject {
         loading = true
         problem = nil
         windows = []
+        apps = []
         features = []
         let link = AgentLink(hosts: machine.hosts) { [weak self] e in
             guard let self else { return }
@@ -267,12 +301,18 @@ final class WindowList: ObservableObject {
                     self.features = msg.features ?? ["windows"]
                     if self.features.contains("windows") {
                         self.link?.send(Control(op: "list"))
+                    } else if self.features.contains("apps") {
+                        self.link?.send(Control(op: "apps"))
                     } else {
                         self.loading = false
                         self.link?.close()
                     }
                 case "windows":
                     self.windows = msg.windows ?? []
+                    self.loading = false
+                    self.link?.close()
+                case "apps":
+                    self.apps = msg.apps ?? []
                     self.loading = false
                     self.link?.close()
                 case "error":

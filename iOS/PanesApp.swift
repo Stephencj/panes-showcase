@@ -73,6 +73,9 @@ struct ContentView: View {
             }, openTerminal: { machine in
                 picking = false
                 store.openTerminal(on: machine)
+            }, openApp: { app, machine in
+                picking = false
+                store.openApp(app, on: machine)
             })
         }
     }
@@ -152,6 +155,8 @@ struct TabScreen: View {
         ZStack(alignment: .top) {
             if case .terminal = tab.kind {
                 TerminalSurface(tab: tab, keyboard: $keyboard)
+            } else if case .app = tab.kind {
+                AppSurface(tab: tab)
             } else {
                 StreamSurface(tab: tab, keyboard: $keyboard)
                     .ignoresSafeArea(.keyboard)
@@ -184,6 +189,7 @@ struct PickerView: View {
     let viewport: CGSize
     let open: (WindowInfo, Machine, Bool) -> Void
     let openTerminal: (Machine) -> Void
+    let openApp: (AppInfo, Machine) -> Void
     @State private var machine = Machine.defaults[0]
     @State private var fit = true
     @StateObject private var list = WindowList()
@@ -217,6 +223,17 @@ struct PickerView: View {
                 }
                 if let problem = list.problem {
                     Text(problem).foregroundStyle(.orange)
+                }
+                if !list.apps.isEmpty {
+                    Section {
+                        ForEach(list.apps) { app in
+                            Button(app.name) { openApp(app, machine) }
+                        }
+                    } header: {
+                        Text("Apps")
+                    } footer: {
+                        Text("Each app runs in its own session on \(machine.name) and keeps running when you leave.")
+                    }
                 }
                 ForEach(groups, id: \.0) { app, windows in
                     Section(app) {
