@@ -5,9 +5,10 @@ import ScreenCaptureKit
 /// Looks up the real windows on this Mac and moves, resizes and raises them
 /// through the Accessibility API.
 enum Windows {
-    /// Ordinary app windows: titled, normal layer, a usable size, not ours.
+    /// Ordinary app windows: on screen, titled, normal layer, a usable size, not ours.
+    /// (Apps keep closed windows around hidden; those can't be streamed.)
     static func list() async throws -> [WindowInfo] {
-        let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
+        let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
         let me = Bundle.main.bundleIdentifier
         return content.windows.compactMap { w in
             guard let app = w.owningApplication, w.windowLayer == 0,

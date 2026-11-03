@@ -127,7 +127,13 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
 
     private func open(_ id: UInt32, viewport: Size?, zoom: Double?) async {
         let t0 = Date()
-        guard var window = try? await Windows.scWindow(id), let frame = Windows.frame(id) else {
+        let found: SCWindow?
+        do { found = try await Windows.scWindow(id) } catch {
+            print("open \(id): window lookup failed: \(error)")
+            found = nil
+        }
+        guard var window = found, let frame = Windows.frame(id) else {
+            print("open \(id): gone (capture list has it: \(found != nil), bounds: \(Windows.frame(id) != nil))")
             send(Control(op: "error", error: "That window is gone."))
             return
         }
@@ -144,8 +150,10 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
             Windows.setFrame(id, target)
             // The window server applies the new frame a moment later; wait for
             // it so the stream starts at the window's real shape and scale.
-            for _ in 0..<20 {
-                if let f = Windows.frame(id), f != frame { break }
+            // Moving lands before resizing, so wait for the size (apps may clamp
+            // it to their minimum, hence the timeout).
+            for _ in 0..<30 {
+                if let f = Windows.frame(id), abs(f.width - size.width) < 2, abs(f.height - size.height) < 2 { break }
                 try? await Task.sleep(for: .milliseconds(25))
             }
             if virtual != nil, let moved = try? await Windows.scWindow(id) { window = moved }
