@@ -62,7 +62,13 @@ enum WebServer {
         // machines.json is shared with the phone app, so it's bundled once at the top level.
         let shared = path == "/machines.json" ? Bundle.main.url(forResource: "machines", withExtension: "json") : nil
         guard let file = WebHTTP.staticFile(path) ?? shared else { return respond(conn, 404, "Not Found") }
-        let body = (try? Data(contentsOf: file)) ?? Data()
+        var body = (try? Data(contentsOf: file)) ?? Data()
+        // A browser on this Mac itself (no Tailscale identity) reaches this Mac
+        // at localhost, which also works with Tailscale HTTPS not set up.
+        if path == "/machines.json", req.headers["tailscale-user-login"] == nil,
+           let me = peers.webAddress(), let text = String(data: body, encoding: .utf8) {
+            body = Data(text.replacingOccurrences(of: "\"\(me)\"", with: "\"http://127.0.0.1:\(WebHTTP.localPort)\"").utf8)
+        }
         respond(conn, 200, req.method == "HEAD" ? Data() : body, type: WebHTTP.contentType(file.pathExtension),
                 length: body.count)
     }
