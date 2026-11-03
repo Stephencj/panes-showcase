@@ -1,0 +1,12 @@
+{
+  "name": "panes-web-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Playwright end-to-end test of Panes Web against the real Mac agent, through tools/web_bridge.py",
+  "scripts": {
+    "test": "node run.mjs",
+    "unit": "node wire.test.mjs"
+  },
+  "dependencies": { "playwright": "1.60.0" }
+}

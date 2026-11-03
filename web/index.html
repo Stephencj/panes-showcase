@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Panes</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="vendor/xterm.css">
+  <link rel="stylesheet" href="style.css">
+  <!-- xterm.js is vendored (see vendor/README.md); these set window.Terminal and window.FitAddon. -->
+  <script src="vendor/xterm.js"></script>
+  <script src="vendor/addon-fit.js"></script>
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header id="bar">
+    <div id="tabs" role="tablist" aria-label="Open tabs"></div>
+    <button id="add" class="icon" title="Open a window" aria-label="Open a window">+</button>
+  </header>
+
+  <main id="stage">
+    <div id="empty">
+      <div class="glyph" aria-hidden="true">&#9635;</div>
+      <h2>No windows open</h2>
+      <button class="primary" id="emptyOpen">Open a window</button>
+    </div>
+  </main>
+
+  <div id="picker" class="sheet-backdrop" hidden>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="pickerTitle">
+      <header class="sheet-head">
+        <button class="link" id="pickerRefresh" title="Refresh">Refresh</button>
+        <h3 id="pickerTitle">Open a window</h3>
+        <button class="link" id="pickerClose">Done</button>
+      </header>
+      <div class="sheet-body">
+        <div class="group">
+          <label class="row">
+            <span>Machine</span>
+            <select id="machine"></select>
+          </label>
+          <div id="windowOptions" hidden>
+            <label class="row"><span>Fit window</span><input type="checkbox" id="fit" class="switch"></label>
+            <label class="row"><span>Play the app's sound</span><input type="checkbox" id="audio" class="switch"></label>
+          </div>
+        </div>
+        <p class="footnote" id="fitNote" hidden>Fitting resizes the window on the Mac to this tab's shape while
+          the tab is open, and puts it back when you close the tab.</p>
+        <div id="pickerContent"></div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
