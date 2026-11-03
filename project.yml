@@ -82,6 +82,7 @@ targets:
       - Tests
       - Shared
       - Agent/Encoder.swift
+      - Agent/AudioEncoder.swift
       - Agent/Peers.swift
     settings:
       base:

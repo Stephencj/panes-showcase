@@ -10,6 +10,8 @@ final class AgentLink {
         case format([Data])
         case frame(keyframe: Bool, ptsMicros: UInt64, avcc: Data)
         case terminal(Data)
+        case audioFormat(AudioFormat)
+        case audio(ptsMicros: UInt64, packet: Data)
         case failed(String)
     }
 
@@ -109,6 +111,10 @@ final class AgentLink {
             if let v = Wire.parseVideoFrame(f.payload) { emit(.frame(keyframe: v.keyframe, ptsMicros: v.ptsMicros, avcc: v.avcc)) }
         case .terminal:
             emit(.terminal(f.payload))
+        case .audioFormat:
+            if let a = Wire.parseAudioFormat(f.payload) { emit(.audioFormat(a)) }
+        case .audioFrame:
+            if let a = Wire.parseAudioFrame(f.payload) { emit(.audio(ptsMicros: a.ptsMicros, packet: a.packet)) }
         }
     }
 

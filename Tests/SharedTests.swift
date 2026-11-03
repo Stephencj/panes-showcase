@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreMedia
 import XCTest
 
@@ -191,5 +192,74 @@ final class WebKeysTests: XCTestCase {
     func testScriptEscapesQuotes() {
         let js = WebKeys.script(WebKeys.keys(for: InputEvent(kind: "text", text: "\"\\")))
         XCTAssertEqual(js, #"panesKey("\"","Quote",222,false,false,true,false);panesKey("\\","Backslash",220,false,false,false,false);"#)
+    }
+}
+
+final class AudioTests: XCTestCase {
+    func testAudioFormatRoundTrips() throws {
+        let f = AudioFormat(sampleRate: 48_000, channels: 2, framesPerPacket: 1024, cookie: Data([1, 2, 3]))
+        var reader = FrameReader()
+        let frames = try reader.push(Wire.audioFormat(f) + Wire.audioFrame(ptsMicros: 99, packet: Data([7, 7])))
+        XCTAssertEqual(Wire.parseAudioFormat(frames[0].payload), f)
+        let a = try XCTUnwrap(Wire.parseAudioFrame(frames[1].payload))
+        XCTAssertEqual(a.ptsMicros, 99)
+        XCTAssertEqual(a.packet, Data([7, 7]))
+    }
+
+    /// A second of 440 Hz through the agent's AAC encoder, the wire, and a
+    /// decoder must come back as a loud tone (not silence, not garbage).
+    func testToneSurvivesEncodeAndDecode() throws {
+        let pcm = try XCTUnwrap(AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000, channels: 2, interleaved: false))
+        var packets: [(UInt64, Data)] = []
+        let encoder = try XCTUnwrap(AudioEncoder(input: pcm) { packets.append(($0, $1)) })
+        for chunk in 0..<48 {
+            let buf = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: pcm, frameCapacity: 1000))
+            buf.frameLength = 1000
+            for ch in 0..<2 {
+                for i in 0..<1000 {
+                    buf.floatChannelData![ch][i] = 0.5 * sin(2 * .pi * 440 * Float(chunk * 1000 + i) / 48_000)
+                }
+            }
+            encoder.encode(buf, ptsMicros: 1_000_000)
+        }
+        XCTAssertGreaterThan(packets.count, 40)
+        XCTAssertEqual(packets[1].0 - packets[0].0, 21_333, "1024 frames at 48 kHz")
+
+        let wire = try XCTUnwrap(Wire.parseAudioFormat(try FrameReader().pushOne(Wire.audioFormat(encoder.format))))
+        let desc = try XCTUnwrap(AudioSamples.format(wire))
+        var asbd = AudioSamples.streamDescription(wire)
+        let aac = try XCTUnwrap(AVAudioFormat(streamDescription: &asbd))
+        let decoder = try XCTUnwrap(AVAudioConverter(from: aac, to: pcm))
+        decoder.magicCookie = wire.cookie
+        var energy: Float = 0, samples = 0
+        for (pts, packet) in packets {
+            XCTAssertNotNil(AudioSamples.sample(packet, format: desc, framesPerPacket: 1024, sampleRate: 48_000, ptsMicros: pts))
+            let comp = AVAudioCompressedBuffer(format: aac, packetCapacity: 1, maximumPacketSize: packet.count)
+            packet.withUnsafeBytes { comp.data.copyMemory(from: $0.baseAddress!, byteCount: packet.count) }
+            comp.byteLength = UInt32(packet.count)
+            comp.packetCount = 1
+            comp.packetDescriptions![0] = AudioStreamPacketDescription(mStartOffset: 0, mVariableFramesInPacket: 0,
+                                                                       mDataByteSize: UInt32(packet.count))
+            let out = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: pcm, frameCapacity: 1024))
+            var fed = false
+            _ = decoder.convert(to: out, error: nil) { _, status in
+                if fed { status.pointee = .noDataNow; return nil }
+                fed = true
+                status.pointee = .haveData
+                return comp
+            }
+            for i in 0..<Int(out.frameLength) { energy += out.floatChannelData![0][i] * out.floatChannelData![0][i] }
+            samples += Int(out.frameLength)
+        }
+        let rms = sqrt(energy / Float(max(samples, 1)))
+        XCTAssertGreaterThan(samples, 30_000)
+        XCTAssertEqual(rms, 0.35, accuracy: 0.08, "0.5-amplitude sine has RMS ≈ 0.354")
+    }
+}
+
+extension FrameReader {
+    func pushOne(_ data: Data) throws -> Data {
+        var r = self
+        return try r.push(data)[0].payload
     }
 }

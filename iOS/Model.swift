@@ -68,6 +68,7 @@ final class PaneTab: ObservableObject, Identifiable {
     private var appURL: URL?
 
     var viewport: CGSize = CGSize(width: 393, height: 700)
+    private let audio = AudioPlayer()
     private var link: AgentLink?
     private var format: CMVideoFormatDescription?
     private var active = true
@@ -112,6 +113,7 @@ final class PaneTab: ObservableObject, Identifiable {
     func close() {
         link?.close()
         link = nil
+        audio.stop()
         status = .closed
     }
 
@@ -131,7 +133,10 @@ final class PaneTab: ObservableObject, Identifiable {
     func setActive(_ on: Bool) {
         guard on != active else { return }
         active = on
-        if case .window = kind { link?.send(Control(op: on ? "resume" : "pause")) }
+        if case .window = kind {
+            link?.send(Control(op: on ? "resume" : "pause"))
+            if !on { audio.stop() }
+        }
     }
 
     func refresh() { link?.send(Control(op: "keyframe")) }
@@ -159,7 +164,8 @@ final class PaneTab: ObservableObject, Identifiable {
             switch kind {
             case .window(let w):
                 let vp = fitToPhone ? Size(width: viewport.width, height: viewport.height) : nil
-                link?.send(Control(op: "open", windowID: w.id, viewport: vp))
+                link?.send(Control(op: "open", windowID: w.id, viewport: vp,
+                                   audio: UserDefaults.standard.object(forKey: "streamAudio") as? Bool ?? true))
                 if !active { link?.send(Control(op: "pause")) }
             case .terminal(let session):
                 let t = terminalView.getTerminal()
@@ -197,6 +203,10 @@ final class PaneTab: ObservableObject, Identifiable {
             }
         case .terminal(let bytes):
             terminalView.feed(byteArray: [UInt8](bytes)[...])
+        case .audioFormat(let f):
+            audio.setFormat(f)
+        case .audio(let pts, let packet):
+            if active { audio.play(ptsMicros: pts, packet: packet) }
         case .format(let sets):
             format = VideoSamples.format(sets)
             renderer.sampleBufferRenderer.flush()

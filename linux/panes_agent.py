@@ -259,6 +259,12 @@ class Xpra:
     def available(self):
         return self.binary is not None and self.html_dir is not None
 
+    @property
+    def sound(self):
+        """App sound needs a PulseAudio server for Xpra to start per session
+        (PipeWire's pulse layer counts)."""
+        return shutil.which("pulseaudio") is not None or shutil.which("pipewire-pulse") is not None
+
     def _free_port(self, host):
         used = {s["port"] for s in self.sessions.values()}
         for port in self.PORTS:
@@ -288,7 +294,8 @@ class Xpra:
         cmd = [self.binary, "start", display, "--daemon=no",
                f"--start-child={app['command']}", "--exit-with-children=yes",
                f"--bind-tcp={host}:{port}", f"--tcp-auth=file:filename={pw_file}",
-               f"--html={self.html_dir}", "--mdns=no", "--notifications=no", "--speaker=off", "--microphone=off",
+               f"--html={self.html_dir}", "--mdns=no", "--notifications=no",
+               f"--speaker={'on' if self.sound else 'off'}", "--microphone=off",
                "--webcam=no", "--printing=no", "--file-transfer=no", "--dpi=144"]
         log = open(os.path.expanduser(f"~/.local/share/panes/xpra-{name}.log"), "ab")
         proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
@@ -330,13 +337,13 @@ class Xpra:
         return False
 
     @staticmethod
-    def url(session):
+    def url(session, sound=False):
         host = session["host"]
         if ":" in host:
             host = f"[{host}]"
         # Xpra's own web client, told to connect straight away with its password.
         return (f"http://{host}:{session['port']}/index.html?password={session['password']}"
-                "&submit=true&sound=false&floating_menu=false&clipboard=true&swap_keys=false")
+                f"&submit=true&sound={'true' if sound else 'false'}&floating_menu=false&clipboard=true&swap_keys=false")
 
 
 XPRA = Xpra()
@@ -376,7 +383,7 @@ class Session:
         if not await loop.run_in_executor(None, XPRA.ready, session):
             self.send(control({"op": "error", "error": f"{app['name']} didn't start (see xpra log on the box)."}))
             return
-        self.send(control({"op": "launched", "app": app["name"], "url": Xpra.url(session)}))
+        self.send(control({"op": "launched", "app": app["name"], "url": Xpra.url(session, XPRA.sound)}))
 
     async def run(self):
         try:

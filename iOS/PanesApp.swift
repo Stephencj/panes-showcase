@@ -5,6 +5,8 @@ struct PanesApp: App {
     @StateObject private var store = Store()
     @Environment(\.scenePhase) private var phase
 
+    init() { AudioPlayer.configureSession() }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -210,6 +212,7 @@ struct PickerView: View {
     let openApp: (AppInfo, Machine) -> Void
     @State private var machine = Machine.defaults[0]
     @State private var fit = true
+    @AppStorage("streamAudio") private var streamAudio = true
     @StateObject private var list = WindowList()
 
     var body: some View {
@@ -221,6 +224,7 @@ struct PickerView: View {
                     }
                     if list.features.contains("windows") {
                         Toggle("Fit window to phone", isOn: $fit)
+                        Toggle("Play the app's sound", isOn: $streamAudio)
                     }
                 } footer: {
                     if list.features.contains("windows") {

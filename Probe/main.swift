@@ -23,6 +23,7 @@ guard let titleNeedle = opts["title"] ?? (terminalMode || appNeedle != nil ? "" 
     exit(2)
 }
 var terminalOutput = ""
+var audioPackets = 0
 // The shell has to compute this, so seeing it proves a real shell ran the line.
 let marker = "PANES_" + "42"
 
@@ -44,6 +45,7 @@ func finish(_ ok: Bool, _ note: String? = nil) {
     if let note { summary["note"] = note }
     summary["frames"] = framesSeen
     summary["keyframes"] = keyframesSeen
+    if opts["audio"] != nil { summary["audioPackets"] = audioPackets }
     let json = try! JSONSerialization.data(withJSONObject: summary, options: [.prettyPrinted, .sortedKeys])
     print(String(data: json, encoding: .utf8)!)
     exit(ok ? 0 : 1)
@@ -97,6 +99,9 @@ func decoded(_ image: CVImageBuffer) {
             summary["framesAfterTyping"] = framesSeen - before
             finish(framesSeen > before, framesSeen > before ? nil : "no new frames after typing")
         }
+    } else if let secs = opts["audio"].flatMap(Double.init) {
+        // Listen for a while; whatever the app plays should arrive as packets.
+        DispatchQueue.main.asyncAfter(deadline: .now() + secs) { finish(audioPackets > 0, audioPackets > 0 ? nil : "no audio") }
     } else {
         finish(true)
     }
@@ -156,7 +161,7 @@ func handle(_ frame: Frame) {
                 let p = fit.split(separator: "x").compactMap { Double($0) }
                 if p.count == 2 { viewport = Size(width: p[0], height: p[1]) }
             }
-            send(Control(op: "open", windowID: w.id, viewport: viewport))
+            send(Control(op: "open", windowID: w.id, viewport: viewport, audio: opts["audio"] != nil))
         case "opened":
             summary["opened"] = "\(Int(msg.width ?? 0))x\(Int(msg.height ?? 0)) pt"
         case "error":
@@ -165,6 +170,10 @@ func handle(_ frame: Frame) {
         default:
             break
         }
+    case .audioFormat:
+        if let f = Wire.parseAudioFormat(frame.payload) { summary["audioFormat"] = "\(Int(f.sampleRate)) Hz x\(f.channels)" }
+    case .audioFrame:
+        audioPackets += 1
     case .terminal:
         terminalOutput += String(decoding: frame.payload, as: UTF8.self)
         if terminalOutput.contains(marker), summary["firstOutputMs"] == nil {
@@ -204,5 +213,5 @@ conn.stateUpdateHandler = { state in
     }
 }
 conn.start(queue: .main)
-DispatchQueue.main.asyncAfter(deadline: .now() + 15) { finish(false, "timed out") }
+DispatchQueue.main.asyncAfter(deadline: .now() + 15 + (opts["audio"].flatMap(Double.init) ?? 0)) { finish(false, "timed out") }
 dispatchMain()

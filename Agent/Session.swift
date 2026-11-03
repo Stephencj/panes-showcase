@@ -25,6 +25,7 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
     private var watch: DispatchSourceTimer?
     private var ended = false
     private var terminal: Terminal?
+    private var audio: AudioCapture?
 
     /// Bytes handed to the socket but not yet sent. Past the limit the phone's
     /// connection can't keep up, so frames are skipped rather than queued
@@ -89,7 +90,7 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
             }
         case "open":
             guard let id = msg.windowID else { return }
-            Task { await open(id, viewport: msg.viewport, zoom: msg.zoom) }
+            Task { await open(id, viewport: msg.viewport, zoom: msg.zoom, withAudio: msg.audio ?? false) }
         case "input":
             if let event = msg.event, let id = windowID { input.handle(event, window: id) }
         case "terminal":
@@ -107,11 +108,30 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
             requestKeyframe()
         case "pause":
             paused = true
+            audio?.paused = true
         case "resume":
             paused = false
+            audio?.paused = false
+            audio?.resendFormat()
             requestKeyframe()
         default:
             break
+        }
+    }
+
+    // MARK: audio
+
+    private func startAudio(_ app: SCRunningApplication) {
+        let capture = AudioCapture(queue: queue,
+                                   onFormat: { [weak self] f in self?.sendRaw(Wire.audioFormat(f)) },
+                                   onPacket: { [weak self] pts, packet in
+                                       // Sound is small; under backlog, video gives way first.
+                                       self?.sendRaw(Wire.audioFrame(ptsMicros: pts, packet: packet))
+                                   })
+        audio = capture
+        Task {
+            do { try await capture.start(app: app) }
+            catch { print("audio capture failed: \(error)") }
         }
     }
 
@@ -132,7 +152,7 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
 
     // MARK: capture
 
-    private func open(_ id: UInt32, viewport: Size?, zoom: Double?) async {
+    private func open(_ id: UInt32, viewport: Size?, zoom: Double?, withAudio: Bool) async {
         let t0 = Date()
         let found: SCWindow?
         do { found = try await Windows.scWindow(id) } catch {
@@ -193,6 +213,7 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
             self.scale = scale
             self.lastSize = now.size
             self.wantKeyframe = true
+            if withAudio, let app = window.owningApplication { self.startAudio(app) }
             self.send(Control(op: "opened", windowID: id, title: window.title,
                               app: window.owningApplication?.applicationName,
                               width: now.width, height: now.height))
@@ -272,6 +293,8 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 
     private func stopCapture() {
+        audio?.stop()
+        audio = nil
         watch?.cancel()
         watch = nil
         if let stream { stream.stopCapture { _ in } }
