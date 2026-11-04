@@ -753,6 +753,19 @@ async function main() {
   const s2 = await page.evaluate(() => window.panes.store.tabs.at(-1).audio.scheduled);
   check('background tab plays no sound', s2 === s1, `${s1} → ${s2}`);
 
+  // MARK: any Mac app, running or not (docs/UI.md: Opening any app)
+  const chessWasRunning = (() => { try { execFileSync('pgrep', ['-x', 'Chess']); return true; } catch { return false; } })();
+  const markApp = await page.evaluate(() => window.__sent.length);
+  await pick(page, 'chess', 'Mac test · app');
+  await until('Chess streams', async () => { const t = (await tabInfo(page)).at(-1); return t.app === 'Chess' && t.frames > 0; }, 40000).catch(() => {});
+  const chessTab = (await tabInfo(page)).at(-1);
+  const sentApp = (await sentSince(page, markApp, 'openApp'))[0];
+  check('the palette lists installed Mac apps; picking one starts it and streams its window',
+    sentApp?.app === 'com.apple.Chess' && chessTab.app === 'Chess' && chessTab.frames > 0, JSON.stringify({ sentApp, chessTab }));
+  check("the started app's tab then refers to its window, and keeps the app's id",
+    await page.evaluate(() => { const t = window.panes.store.tabs.at(-1); return t.kind.window.id > 0 && t.ref().windowID === t.kind.window.id && t.ref().appID === 'com.apple.Chess'; }));
+  if (!chessWasRunning) { try { execFileSync('killall', ['Chess']); } catch { /* already gone */ } }
+
   // MARK: closing tabs ends the terminal sessions
   for (let i = 0; i < 8 && (await page.locator('#tabs .tab').count()) > 0; i++) {
     await page.locator('#tabs .tab .x').first().click();

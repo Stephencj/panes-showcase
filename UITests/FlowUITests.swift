@@ -82,7 +82,9 @@ final class FlowUITests: XCTestCase {
         let field = app.textFields["search"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["MAC MINI"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["FEDORA-1"].exists)
+        // A Mac lists every installed app, so with nothing typed it shows a few and an "All N apps" row.
+        XCTAssertTrue(app.buttons["all-apps-Mac mini"].waitForExistence(timeout: 10))
+        // (linux-box's section is further down; the search below finds it.)
         field.typeText("term fedora")
         let terminal = app.buttons["result-linux-box-terminal"]
         XCTAssertTrue(terminal.waitForExistence(timeout: 10))
@@ -163,6 +165,23 @@ final class FlowUITests: XCTestCase {
         XCTAssertEqual(app.textFields["Name"].value as? String, "Test iPhone")
         shot(app, "6-settings")
         app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(app.switches["Fit windows to the phone"].waitForNonExistence(timeout: 5))
+        app.buttons["Done"].firstMatch.tap()   // and the grid
+
+        // Any installed Mac app, running or not: Chess isn't running; picking it starts it.
+        app.buttons["Open an app"].tap()
+        app.textFields["search"].typeText("chess")
+        let chess = app.buttons["result-Mac mini-acom.apple.Chess"]
+        XCTAssertTrue(chess.waitForExistence(timeout: 15))
+        chess.tap()
+        let deadline = Date().addingTimeInterval(40)
+        while Date() < deadline, !app.buttons["pill"].label.hasPrefix("Chess on Mac mini") { usleep(500_000) }
+        XCTAssertTrue(app.buttons["pill"].label.hasPrefix("Chess on Mac mini"), app.buttons["pill"].label)
+        // Live once Chess has a window and it streams: the spinner goes, no error shows.
+        XCTAssertTrue(app.staticTexts["Opening Chess on Mac mini…"].waitForNonExistence(timeout: 40), "Chess never opened")
+        XCTAssertFalse(app.buttons["Reconnect"].exists)
+        sleep(2)
+        shot(app, "7-mac-app")
     }
 
     private func wait(_ e: XCUIElement, value: String, timeout: TimeInterval = 5) throws {

@@ -80,6 +80,58 @@ def is_tailnet(ip):
     return int(parts[0]) == 100 and 64 <= int(parts[1]) <= 127
 
 
+PROC_TCP = ("/proc/net/tcp", "/proc/net/tcp6")
+
+
+def socket_owner_uid(peer_port, local_port, tables=PROC_TCP):
+    """The uid owning the far end of a loopback TCP connection to us: the socket
+    whose local port is the peer's and whose remote port is ours, in
+    /proc/net/tcp. None when /proc has no answer (not Linux, or it's gone)."""
+    for table in tables:
+        try:
+            with open(table) as f:
+                lines = f.readlines()[1:]
+        except OSError:
+            continue
+        for line in lines:
+            parts = line.split()
+            if len(parts) < 8:
+                continue
+            try:
+                lport = int(parts[1].rsplit(":", 1)[1], 16)
+                rport = int(parts[2].rsplit(":", 1)[1], 16)
+                uid = int(parts[7])
+            except (IndexError, ValueError):
+                continue
+            if lport == peer_port and rport == local_port:
+                return uid
+    return None
+
+
+def process_uids(name, proc="/proc"):
+    """uids of running processes called `name` (tailscaled, which proxies Panes Web)."""
+    uids = set()
+    for comm in glob.glob(os.path.join(proc, "[0-9]*", "comm")):
+        try:
+            with open(comm) as f:
+                if f.read().strip() != name:
+                    continue
+            uids.add(os.stat(os.path.dirname(comm)).st_uid)
+        except OSError:
+            continue
+    return uids
+
+
+def loopback_caller_allowed(peer_port, local_port, extra_uids=(), tables=PROC_TCP, my_uid=None):
+    """Another account on this machine mustn't use our tabs: a loopback caller
+    has to be us (or, for Panes Web, tailscaled). Where the owner can't be
+    found (no /proc) loopback is trusted, as before."""
+    uid = socket_owner_uid(peer_port, local_port, tables)
+    if uid is None:
+        return True
+    return uid == (os.getuid() if my_uid is None else my_uid) or uid in extra_uids
+
+
 class Peers:
     """This machine, or tailnet devices owned by the same Tailscale user."""
 
@@ -879,6 +931,13 @@ class WebServer:
                 writer.write(response(400, "Bad Request", b"Bad request\n"))
                 return
             loop = asyncio.get_running_loop()
+            # Only this account (or tailscaled, which publishes Panes Web) may call in.
+            peer = writer.get_extra_info("peername") or ("", 0)
+            here = writer.get_extra_info("sockname") or ("", 0)
+            if not loopback_caller_allowed(peer[1], here[1], extra_uids=process_uids("tailscaled")):
+                print(f"web refused a caller on port {peer[1]}: another account", flush=True)
+                writer.write(response(403, "Forbidden", b"Forbidden\n"))
+                return
             owner = None
             if "tailscale-user-login" in headers:
                 owner = await loop.run_in_executor(None, self.peers.owner_login)
@@ -1008,8 +1067,14 @@ async def main():
     await loop.run_in_executor(None, peers.status)   # so hello doesn't wait on tailscale
 
     async def accept(reader, writer):
-        ip = (writer.get_extra_info("peername") or ("",))[0]
+        peer = writer.get_extra_info("peername") or ("", 0)
+        ip = peer[0]
         allowed = await loop.run_in_executor(None, peers.allowed, ip)
+        if allowed and is_loopback(ip):
+            here = writer.get_extra_info("sockname") or ("", 0)
+            allowed = loopback_caller_allowed(peer[1], here[1])
+            if not allowed:
+                print(f"refused a loopback caller on port {peer[1]}: another account", flush=True)
         if not allowed:
             writer.close()
             return

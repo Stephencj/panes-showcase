@@ -64,6 +64,8 @@ final class PaneTab: ObservableObject, Identifiable {
     @Published var windowSize: CGSize
     /// What the tab grid shows for it.
     @Published var preview: UIImage?
+    /// A window tab's window; 0 until a started app shows one (openApp).
+    private(set) var windowID: UInt32 = 0
 
     let renderer = AVSampleBufferDisplayLayer()
     /// Terminal tabs keep their view (and its scrollback) across tab switches.
@@ -84,6 +86,9 @@ final class PaneTab: ObservableObject, Identifiable {
         v.isOpaque = false
         v.backgroundColor = .black
         v.scrollView.isScrollEnabled = false
+        // The tab already sits inside the safe area; insets here would push the
+        // app down and cut its bottom off.
+        v.scrollView.contentInsetAdjustmentBehavior = .never
         return v
     }()
     private var appURL: URL?
@@ -96,11 +101,19 @@ final class PaneTab: ObservableObject, Identifiable {
     private var active = true
     private var waitingForKeyframe = true
 
+    /// A window tab whose app is being started (no window yet).
+    var startingApp: Bool {
+        if case .window = kind { return windowID == 0 }
+        return false
+    }
+
     /// How another device (or a later visit) opens the same thing.
     var ref: TabRef {
         switch kind {
         case .window(let w):
-            TabRef(machine: machine.name, kind: "window", app: w.app, title: title, windowID: w.id)
+            // The bundle id lets a later visit start the app if the window is gone.
+            TabRef(machine: machine.name, kind: "window", app: w.app, title: title,
+                   windowID: windowID == 0 ? nil : windowID, appID: w.bundleID.isEmpty ? nil : w.bundleID)
         case .terminal(let session):
             TabRef(machine: machine.name, kind: "terminal", app: "Terminal", title: title, session: session)
         case .app(let a, let session):
@@ -142,6 +155,7 @@ final class PaneTab: ObservableObject, Identifiable {
         case .window(let w):
             title = w.title
             windowSize = CGSize(width: w.width, height: w.height)
+            windowID = w.id
         case .terminal:
             title = "Terminal"
             windowSize = .zero
@@ -216,8 +230,12 @@ final class PaneTab: ObservableObject, Identifiable {
             switch kind {
             case .window(let w):
                 let vp = fitToPhone ? Size(width: viewport.width, height: viewport.height) : nil
-                link?.send(Control(op: "open", windowID: w.id, viewport: vp,
-                                   audio: Store.setting("streamAudio")))
+                if windowID == 0 {
+                    // A Mac app that may not be running: the agent starts it and streams its window.
+                    link?.send(Control(op: "openApp", viewport: vp, audio: Store.setting("streamAudio"), app: w.bundleID))
+                } else {
+                    link?.send(Control(op: "open", windowID: windowID, viewport: vp, audio: Store.setting("streamAudio")))
+                }
                 if !active { link?.send(Control(op: "pause")) }
             case .terminal(let session):
                 let t = terminalView.getTerminal()
@@ -231,6 +249,7 @@ final class PaneTab: ObservableObject, Identifiable {
                 webAddress = msg.web
             case "opened":
                 status = .live
+                if windowID == 0, let id = msg.windowID { windowID = id }
                 if let t = msg.title, !t.isEmpty { title = t }
                 if let w = msg.width, let h = msg.height { windowSize = CGSize(width: w, height: h) }
             case "terminalOpened":
@@ -368,6 +387,13 @@ final class Store: ObservableObject {
         add(PaneTab(machine: machine, kind: .terminal(session: session ?? Self.newSessionName())), viewport: .zero)
     }
 
+    /// Any installed Mac app, running or not: the tab's agent starts it and
+    /// streams the window it shows.
+    func openMacApp(_ app: AppInfo, on machine: Machine) {
+        let w = WindowInfo(id: 0, app: app.name, bundleID: app.id, title: app.name, width: 0, height: 0)
+        add(PaneTab(machine: machine, kind: .window(w), fitToPhone: Self.fitWindows), viewport: viewport)
+    }
+
     func openApp(_ app: AppInfo, on machine: Machine, session: String? = nil) {
         add(PaneTab(machine: machine, kind: .app(app, session: session ?? Self.newSessionName())), viewport: .zero)
     }
@@ -387,8 +413,9 @@ final class Store: ObservableObject {
         let kind: PaneTab.Kind
         switch ref.kind {
         case "window":
-            guard let id = ref.windowID else { return nil }
-            kind = .window(WindowInfo(id: id, app: ref.app, bundleID: "", title: ref.title ?? ref.app, width: 0, height: 0))
+            guard ref.windowID != nil || ref.appID != nil else { return nil }
+            kind = .window(WindowInfo(id: ref.windowID ?? 0, app: ref.app, bundleID: ref.appID ?? "",
+                                      title: ref.title ?? ref.app, width: 0, height: 0))
         case "terminal":
             kind = .terminal(session: ref.session ?? Self.newSessionName())
         default:
@@ -631,9 +658,21 @@ final class WindowList: ObservableObject {
     @Published var loading = false
     @Published var problem: String?
     private var link: AgentLink?
+    private var waiting = 0
+
+    private func answered() {
+        waiting -= 1
+        if waiting <= 0 { done() }
+    }
+
+    private func done() {
+        loading = false
+        link?.close()
+    }
 
     func load(_ machine: Machine) {
         link?.close()
+        waiting = 0
         loading = true
         problem = nil
         windows = []
@@ -649,22 +688,15 @@ final class WindowList: ObservableObject {
                 case "hello":
                     // Older agents didn't say; they only did windows.
                     self.features = msg.features ?? ["windows"]
-                    if self.features.contains("windows") {
-                        self.link?.send(Control(op: "list"))
-                    } else if self.features.contains("apps") {
-                        self.link?.send(Control(op: "apps"))
-                    } else {
-                        self.loading = false
-                        self.link?.close()
-                    }
+                    if self.features.contains("windows") { self.waiting += 1; self.link?.send(Control(op: "list")) }
+                    if self.features.contains("apps") { self.waiting += 1; self.link?.send(Control(op: "apps")) }
+                    if self.waiting == 0 { self.done() }
                 case "windows":
                     self.windows = msg.windows ?? []
-                    self.loading = false
-                    self.link?.close()
+                    self.answered()
                 case "apps":
                     self.apps = msg.apps ?? []
-                    self.loading = false
-                    self.link?.close()
+                    self.answered()
                 case "error":
                     self.problem = msg.error
                 default:
