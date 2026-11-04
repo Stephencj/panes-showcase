@@ -54,9 +54,15 @@ The agent's `hello` reply adds `"web": "https://<Self.DNSName without the traili
 
 ## Web client behaviour (mirrors the phone)
 
-- **Tabs and picker:** a tab strip and a `+` picker. Pick a machine from
-  `machines.json`, then a window, **New terminal**, or an app, depending on the
-  `features` in `hello`.
+- **Tabs and search:** browser-style tabs on top and a command palette (⌘K,
+  `+` or the search box) that asks every machine in `machines.json` at once
+  for its windows, **New terminal** and apps, depending on the `features` in
+  `hello` (the layout is in docs/UI.md, Panes Web). Background tabs keep their
+  connection and their element; switching shows the last frame at once.
+- **Other devices:** the device protocol in docs/UI.md. The device id is made
+  once and kept in localStorage; the name defaults to e.g. "Chrome on macOS".
+- **Installable:** `manifest.webmanifest` and `icons/` (the PNGs are rendered
+  from `icon.svg` by `tools/web-e2e/make_icons.mjs`).
 - **One connection per tab:** each tab opens its own WebSocket to
   `wss://<machine web host>:7443/ws`. If it drops, the tab reconnects and
   reattaches to the same session name.

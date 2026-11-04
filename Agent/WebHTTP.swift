@@ -44,9 +44,12 @@ enum WebHTTP {
         case "js", "mjs": "text/javascript; charset=utf-8"
         case "css": "text/css; charset=utf-8"
         case "json": "application/json"
+        case "webmanifest": "application/manifest+json"
         case "svg": "image/svg+xml"
         case "png": "image/png"
         case "ico": "image/x-icon"
+        case "woff2": "font/woff2"
+        case "woff": "font/woff"
         default: "application/octet-stream"
         }
     }

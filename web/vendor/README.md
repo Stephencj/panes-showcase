@@ -10,3 +10,11 @@ Served as-is with the web client (no build step). Downloaded from jsDelivr.
 To update, fetch the same paths for the new version, e.g.
 `https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js`, and change the
 versions here.
+
+Fonts (docs/UI.md: Inter for the UI, JetBrains Mono for terminals), the
+variable Latin subsets from Fontsource on jsDelivr:
+
+| File | Package | Version | License |
+|---|---|---|---|
+| `fonts/inter-latin-wght-normal.woff2` | [@fontsource-variable/inter](https://fontsource.org/fonts/inter) (`files/`) | 5.1.0 | SIL OFL 1.1, `LICENSE-inter` |
+| `fonts/jetbrains-mono-latin-wght-normal.woff2` | [@fontsource-variable/jetbrains-mono](https://fontsource.org/fonts/jetbrains-mono) (`files/`) | 5.1.0 | SIL OFL 1.1, `LICENSE-jetbrains-mono` |
