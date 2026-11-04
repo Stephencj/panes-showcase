@@ -124,11 +124,12 @@ def process_uids(name, proc="/proc"):
 
 def loopback_caller_allowed(peer_port, local_port, extra_uids=(), tables=PROC_TCP, my_uid=None):
     """Another account on this machine mustn't use our tabs: a loopback caller
-    has to be us (or, for Panes Web, tailscaled). Where the owner can't be
-    found (no /proc) loopback is trusted, as before."""
+    has to be us (or, for Panes Web, tailscaled). A caller /proc doesn't list
+    is refused: it can't be shown to be us. Only with no /proc at all (not
+    Linux) is loopback trusted, as before."""
     uid = socket_owner_uid(peer_port, local_port, tables)
     if uid is None:
-        return True
+        return not any(os.path.exists(t) for t in tables)
     return uid == (os.getuid() if my_uid is None else my_uid) or uid in extra_uids
 
 

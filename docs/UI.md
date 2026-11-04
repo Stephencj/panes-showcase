@@ -114,8 +114,9 @@ Search lists every app a machine has, running or not.
 Loopback callers used to be trusted outright. The Linux agent now checks
 which account owns the calling socket (its port pair in /proc/net/tcp): only
 the agent's own account may use port 7890, and on 7891 also tailscaled (which
-publishes Panes Web). Without /proc (not Linux) loopback is trusted as before;
-a Mac is assumed to be single-user.
+publishes Panes Web). A caller that /proc doesn't list is refused, since it
+can't be shown to be the agent's account. Without /proc at all (not Linux)
+loopback is trusted as before; a Mac is assumed to be single-user.
 
 ## Tabs on other devices: protocol
 
