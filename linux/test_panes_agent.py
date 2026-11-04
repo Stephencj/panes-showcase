@@ -398,7 +398,11 @@ class LoopbackOwnerTests(unittest.TestCase):
         self.assertFalse(ok(0xA1B2, 7890))           # another account (solbot)
         self.assertFalse(ok(0xE5F6, 7891))           # root, but tailscaled isn't root here
         self.assertTrue(ok(0xE5F6, 7891, {0}))       # tailscaled publishing Panes Web
-        self.assertTrue(ok(0x9999, 7890))            # not in /proc: trusted as before
+        self.assertFalse(ok(0x9999, 7890))           # not in /proc: can't be shown to be us
+
+    def test_without_proc_loopback_is_trusted(self):
+        missing = (os.path.join(self.dir.name, "missing"),)
+        self.assertTrue(pa.loopback_caller_allowed(0x9999, 7890, (), missing, my_uid=1000))
 
     def test_process_uids_reads_comm(self):
         proc = os.path.join(self.dir.name, "proc")
