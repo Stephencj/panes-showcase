@@ -351,3 +351,77 @@ final class WebServerTests: XCTestCase {
         }
     }
 }
+
+final class DeviceBookTests: XCTestCase {
+    private func tab(_ app: String) -> TabRef { TabRef(machine: "Mac mini", kind: "window", app: app, windowID: 7) }
+
+    func testReportListAndSendAcrossDevices() {
+        var clock = 1000.0
+        let book = DeviceBook(file: nil, now: { clock })
+        XCTAssertEqual(book.report(DeviceInfo(id: "phone-1", name: "iPhone", kind: "phone", tabs: [tab("Xcode")])), [])
+        clock += 5
+        _ = book.report(DeviceInfo(id: "web-1", name: "Chrome on Linux", kind: "browser", tabs: []))
+        // Newest first, and never the asker itself.
+        XCTAssertEqual(book.list().map(\.id), ["web-1", "phone-1"])
+        XCTAssertEqual(book.list(except: "web-1").map(\.id), ["phone-1"])
+        XCTAssertEqual(book.list(except: "web-1").first?.tabs, [tab("Xcode")])
+        XCTAssertEqual(book.list().first?.seen, 1005)
+
+        XCTAssertTrue(book.send(tab("Xcode"), to: "web-1", from: "iPhone", id: "s1"))
+        XCTAssertTrue(book.send(tab("Xcode"), to: "web-1", from: "iPhone", id: "s1"))   // a resend isn't doubled
+        XCTAssertFalse(book.send(tab("Xcode"), to: "nobody", from: "iPhone", id: "s2"))
+        let got = book.report(DeviceInfo(id: "web-1", name: "Chrome on Linux", kind: "browser", tabs: []))
+        XCTAssertEqual(got.map(\.from), ["iPhone"])
+        XCTAssertEqual(got.first?.tab, tab("Xcode"))
+        // Picked up once, then gone.
+        XCTAssertEqual(book.report(DeviceInfo(id: "web-1", name: "Chrome on Linux", kind: "browser", tabs: [])), [])
+    }
+
+    func testOldDevicesAndSendsAgeOut() {
+        var clock = 0.0
+        let book = DeviceBook(file: nil, now: { clock })
+        _ = book.report(DeviceInfo(id: "a", name: "A", kind: "phone", tabs: []))
+        _ = book.report(DeviceInfo(id: "b", name: "B", kind: "browser", tabs: []))
+        book.send(tab("Xcode"), to: "b", from: "A", id: "s")
+        clock = DeviceBook.sentTTL + 1
+        _ = book.report(DeviceInfo(id: "a", name: "A", kind: "phone", tabs: []))
+        XCTAssertEqual(book.report(DeviceInfo(id: "b", name: "B", kind: "browser", tabs: [])), [])
+        clock += DeviceBook.deviceTTL + 1
+        _ = book.report(DeviceInfo(id: "a", name: "A", kind: "phone", tabs: []))
+        XCTAssertEqual(book.list().map(\.id), ["a"])
+    }
+
+    func testRejectsOddIdsAndCapsSizes() {
+        let book = DeviceBook(file: nil)
+        XCTAssertEqual(book.report(DeviceInfo(id: "../../etc", name: "x", kind: "phone", tabs: [])), [])
+        XCTAssertTrue(book.list().isEmpty)
+        let many = (0..<100).map { tab("App \($0)") }
+        _ = book.report(DeviceInfo(id: "big", name: String(repeating: "n", count: 500), kind: "weird", tabs: many))
+        let d = book.list().first
+        XCTAssertEqual(d?.tabs.count, DeviceBook.maxTabs)
+        XCTAssertEqual(d?.name.count, 60)
+        XCTAssertEqual(d?.kind, "browser")
+        for i in 0..<30 { book.send(tab("T"), to: "big", from: "x", id: "s\(i)") }
+        XCTAssertEqual(book.report(DeviceInfo(id: "big", name: "n", kind: "phone", tabs: [])).count, DeviceBook.maxInbox)
+    }
+
+    func testSurvivesARestart() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("panes-devices-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let one = DeviceBook(file: file)
+        _ = one.report(DeviceInfo(id: "p", name: "iPhone", kind: "phone", tabs: [tab("Xcode")]))
+        one.send(tab("Logic Pro"), to: "p", from: "Chrome", id: "s")
+        let two = DeviceBook(file: file)
+        XCTAssertEqual(two.list().first?.tabs, [tab("Xcode")])
+        XCTAssertEqual(two.report(DeviceInfo(id: "p", name: "iPhone", kind: "phone", tabs: [])).first?.tab.app, "Logic Pro")
+        let perms = try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? Int
+        XCTAssertEqual(perms, 0o600)
+    }
+
+    func testDeviceMessagesRoundTrip() throws {
+        let msg = Control(op: "send", name: "iPhone", to: "web-1",
+                          tab: TabRef(machine: "linux-box", kind: "app", app: "Calculator", session: "panes-abc123", appID: "org.gnome.Calculator"))
+        let back = try JSONDecoder().decode(Control.self, from: try JSONEncoder().encode(msg))
+        XCTAssertEqual(back, msg)
+    }
+}

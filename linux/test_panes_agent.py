@@ -304,6 +304,69 @@ async def ws_connect(port, path="/ws", extra=None):
     return status, pa.WebSocket(r, w, client=True)
 
 
+class DeviceBookTests(unittest.TestCase):
+    TAB = {"machine": "Mac mini", "kind": "window", "app": "Xcode", "windowID": 7}
+
+    def test_report_list_send_and_pick_up(self):
+        clock = [1000.0]
+        book = pa.DeviceBook(None, now=lambda: clock[0])
+        self.assertEqual(book.report({"id": "phone-1", "name": "iPhone", "kind": "phone", "tabs": [self.TAB]}), [])
+        clock[0] += 5
+        book.report({"id": "web-1", "name": "Chrome on Linux", "kind": "browser", "tabs": []})
+        self.assertEqual([d["id"] for d in book.list()], ["web-1", "phone-1"])
+        self.assertEqual([d["id"] for d in book.list("web-1")], ["phone-1"])
+        self.assertEqual(book.list("web-1")[0]["tabs"], [self.TAB])
+        self.assertTrue(book.send(self.TAB, "web-1", "iPhone", "s1"))
+        self.assertTrue(book.send(self.TAB, "web-1", "iPhone", "s1"))
+        self.assertFalse(book.send(self.TAB, "nobody", "iPhone", "s2"))
+        self.assertFalse(book.send({"kind": "window"}, "web-1", "iPhone", "s3"))
+        got = book.report({"id": "web-1", "name": "Chrome on Linux", "kind": "browser", "tabs": []})
+        self.assertEqual([(g["from"], g["tab"]) for g in got], [("iPhone", self.TAB)])
+        self.assertEqual(book.report({"id": "web-1", "name": "x", "kind": "browser", "tabs": []}), [])
+
+    def test_ageing_odd_input_caps_and_forget(self):
+        clock = [0.0]
+        book = pa.DeviceBook(None, now=lambda: clock[0])
+        self.assertEqual(book.report({"id": "../etc", "tabs": []}), [])
+        self.assertEqual(book.report("nope"), [])
+        self.assertEqual(book.list(), [])
+        book.report({"id": "a", "name": "A", "kind": "phone", "tabs": []})
+        book.report({"id": "b", "name": "n" * 500, "kind": "weird",
+                     "tabs": [dict(self.TAB, app=f"T{i}") for i in range(100)] + [{"evil": True}]})
+        b = [d for d in book.list() if d["id"] == "b"][0]
+        self.assertEqual((len(b["tabs"]), len(b["name"]), b["kind"]), (pa.DeviceBook.MAX_TABS, 60, "browser"))
+        for i in range(30):
+            book.send(self.TAB, "b", "A", f"s{i}")
+        clock[0] = pa.DeviceBook.SENT_TTL + 1
+        book.report({"id": "a", "name": "A", "kind": "phone", "tabs": []})
+        self.assertEqual(book.report({"id": "b", "name": "B", "kind": "browser", "tabs": []}), [])
+        book.forget("b")
+        self.assertEqual([d["id"] for d in book.list()], ["a"])
+        clock[0] += pa.DeviceBook.DEVICE_TTL + 1
+        self.assertEqual(book.list(), [])
+
+    def test_survives_a_restart_with_a_private_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "state", "devices.json")
+            one = pa.DeviceBook(path)
+            one.report({"id": "p", "name": "iPhone", "kind": "phone", "tabs": [self.TAB]})
+            one.send(dict(self.TAB, app="Logic Pro"), "p", "Chrome", "s")
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+            two = pa.DeviceBook(path)
+            self.assertEqual(two.list()[0]["tabs"], [self.TAB])
+            self.assertEqual(two.report({"id": "p", "name": "iPhone", "kind": "phone", "tabs": []})[0]["tab"]["app"], "Logic Pro")
+
+    def test_the_swift_agents_file_reads_here(self):
+        # Same JSON on disk as Agent/Devices.swift writes.
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "devices.json")
+            with open(path, "w") as f:
+                json.dump({"devices": [{"id": "x", "name": "X", "kind": "phone", "tabs": [], "seen": 10.0}],
+                           "inbox": {"x": [{"id": "s", "from": "Y", "tab": self.TAB, "at": 10.0}]}}, f)
+            book = pa.DeviceBook(path, now=lambda: 20.0)
+            self.assertEqual(book.report({"id": "x", "name": "X", "kind": "phone", "tabs": []})[0]["tab"], self.TAB)
+
+
 class WebEndToEndTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.dir = tempfile.TemporaryDirectory()

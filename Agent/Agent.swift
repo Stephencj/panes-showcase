@@ -6,6 +6,8 @@ import Network
 @main
 enum Agent {
     static let peers = Peers()
+    /// PANES_PORT moves it, so a test build can run beside the installed agent.
+    static let port: UInt16 = ProcessInfo.processInfo.environment["PANES_PORT"].flatMap(UInt16.init) ?? Wire.port
     static var sessions: [ObjectIdentifier: Session] = [:]
     static let lock = NSLock()
 
@@ -19,7 +21,7 @@ enum Agent {
         ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleSystemSleepDisabled],
                                               reason: "Streaming windows to Panes")
         do { try listen() } catch {
-            print("can't listen on \(Wire.port): \(error)")
+            print("can't listen on \(Agent.port): \(error)")
             exit(1)
         }
         do {
@@ -54,7 +56,7 @@ enum Agent {
         tcp.noDelay = true
         let params = NWParameters(tls: nil, tcp: tcp)
         params.allowLocalEndpointReuse = true
-        let listener = try NWListener(using: params, on: NWEndpoint.Port(rawValue: Wire.port)!)
+        let listener = try NWListener(using: params, on: NWEndpoint.Port(rawValue: Agent.port)!)
         listener.newConnectionHandler = { conn in
             DispatchQueue.global().async {
                 guard case let .hostPort(host, _) = conn.endpoint, peers.allowed("\(host)") else {
@@ -71,6 +73,6 @@ enum Agent {
             }
         }
         listener.start(queue: .main)
-        print("Panes agent listening on \(Wire.port)")
+        print("Panes agent listening on \(Agent.port)")
     }
 }

@@ -15,11 +15,14 @@ var args = CommandLine.arguments.dropFirst()
 var opts: [String: String] = [:]
 while let key = args.popFirst() { if key.hasPrefix("--") { opts[String(key.dropFirst(2))] = args.popFirst() ?? "" } }
 let terminalMode = opts["terminal"] != nil
+let devicesMode = opts["devices"] != nil
 let appNeedle = opts["app"]
-guard let titleNeedle = opts["title"] ?? (terminalMode || appNeedle != nil ? "" : nil) else {
+guard let titleNeedle = opts["title"] ?? (terminalMode || appNeedle != nil || devicesMode ? "" : nil) else {
     print("usage: panes-probe --title TEXT [--host H] [--port P] [--fit WxH] [--type TEXT] [--png PATH]")
     print("       panes-probe --terminal NAME [--host H] [--port P]   (runs a command in a terminal tab)")
     print("       panes-probe --app TEXT [--host H]   (launches a Linux app; checks its web client answers)")
+    print("       panes-probe --devices 1 [--host H]   (two made-up devices send each other a tab, then are forgotten)")
+    print("       panes-probe --title TEXT --snapshot out.jpg   (asks for a window preview)")
     exit(2)
 }
 var terminalOutput = ""
@@ -88,7 +91,9 @@ func decoded(_ image: CVImageBuffer) {
         try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
         summary["png"] = path
     }
-    if let text = opts["type"] {
+    if opts["snapshot"] != nil {
+        send(Control(op: "snapshot", width: 400))
+    } else if let text = opts["type"] {
         // --wait S: let the window settle before clicking and typing.
         if let wait = opts["wait"].flatMap(Double.init) { Thread.sleep(forTimeInterval: wait) }
         send(Control(op: "input", event: InputEvent(kind: "click", x: 0.5, y: 0.5)))
@@ -117,7 +122,9 @@ func handle(_ frame: Frame) {
         case "hello":
             summary["machine"] = msg.machine
             summary["features"] = msg.features
-            if terminalMode {
+            if devicesMode {
+                devicesStep()
+            } else if terminalMode {
                 send(Control(op: "terminal", name: opts["terminal"], cols: 100, rows: 30))
             } else if appNeedle != nil {
                 send(Control(op: "apps"))
@@ -166,12 +173,21 @@ func handle(_ frame: Frame) {
             send(Control(op: "open", windowID: w.id, viewport: viewport, audio: opts["audio"] != nil))
         case "opened":
             summary["opened"] = "\(Int(msg.width ?? 0))x\(Int(msg.height ?? 0)) pt"
+        case "inbox", "devices":
+            if devicesMode { devicesStep(msg) }
         case "error":
             summary["error"] = msg.error
             if msg.error?.contains("System Settings") != true { finish(false, msg.error) }
         default:
             break
         }
+    case .snapshot:
+        let path = opts["snapshot"] ?? "/dev/null"
+        try? frame.payload.write(to: URL(fileURLWithPath: path))
+        let image = NSImage(data: frame.payload)
+        summary["snapshotBytes"] = frame.payload.count
+        summary["snapshotSize"] = image.map { "\(Int($0.size.width))x\(Int($0.size.height))" }
+        finish(image != nil, image == nil ? "snapshot isn't an image" : nil)
     case .audioFormat:
         if let f = Wire.parseAudioFormat(frame.payload) { summary["audioFormat"] = "\(Int(f.sampleRate)) Hz x\(f.channels)" }
     case .audioFrame:
@@ -196,6 +212,44 @@ func handle(_ frame: Frame) {
         framesSeen += 1
         if f.keyframe { keyframesSeen += 1 }
         if let s = VideoSamples.sample(f.avcc, format: format, ptsMicros: f.ptsMicros, displayImmediately: false) { decode(s) }
+    }
+}
+
+// --devices: A reports, B reports, A sends B a tab, B picks it up, A sees B.
+// Both are forgotten afterwards so they don't show up in anyone's list.
+let probeID = "probe-" + UUID().uuidString.prefix(8).lowercased()
+let deviceA = DeviceInfo(id: probeID + "-a", name: "Probe A", kind: "browser", tabs: [])
+let deviceB = DeviceInfo(id: probeID + "-b", name: "Probe B", kind: "phone",
+                         tabs: [TabRef(machine: "Mac mini", kind: "terminal", app: "Terminal", session: "panes-probe")])
+let probeTab = TabRef(machine: "Mac mini", kind: "window", app: "Xcode", windowID: 1)
+var deviceStep = 0
+func devicesStep(_ msg: Control? = nil) {
+    deviceStep += 1
+    switch deviceStep {
+    case 1: send(Control(op: "device", device: deviceA))
+    case 2: send(Control(op: "device", device: deviceB))
+    case 3:
+        send(Control(op: "send", name: "Probe A", to: deviceB.id, tab: probeTab))
+        send(Control(op: "device", device: deviceB))
+    case 4:
+        let got = msg?.sent ?? []
+        summary["received"] = got.map { "\($0.tab.app) from \($0.from)" }
+        guard got.count == 1, got[0].tab == probeTab, got[0].from == "Probe A" else { return finish(false, "B didn't get A's tab") }
+        send(Control(op: "devices", device: deviceA))
+    case 5:
+        let list = msg?.devices ?? []
+        let b = list.first { $0.id == deviceB.id }
+        summary["listedB"] = b != nil
+        summary["listedSelf"] = list.contains { $0.id == deviceA.id }
+        send(Control(op: "forget", device: deviceA))
+        send(Control(op: "forget", device: deviceB))
+        send(Control(op: "devices"))
+    case 6:
+        let left = (msg?.devices ?? []).filter { $0.id.hasPrefix(probeID) }
+        summary["leftBehind"] = left.count
+        let b = summary["listedB"] as? Bool == true, me = summary["listedSelf"] as? Bool == true
+        finish(b && !me && left.isEmpty, b && !me && left.isEmpty ? nil : "device list wrong")
+    default: break
     }
 }
 

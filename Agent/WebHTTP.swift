@@ -3,7 +3,8 @@ import Foundation
 /// The parts of Panes Web's HTTP handling that don't touch the network, kept
 /// apart so they can be tested on their own.
 enum WebHTTP {
-    static let localPort: UInt16 = 7891
+    /// PANES_WEB_PORT moves it, so a test build can run beside the installed agent.
+    static let localPort: UInt16 = ProcessInfo.processInfo.environment["PANES_WEB_PORT"].flatMap(UInt16.init) ?? 7891
     static let publicPort: UInt16 = 7443
 
     struct Request {

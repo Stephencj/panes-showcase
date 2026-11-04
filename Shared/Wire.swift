@@ -14,6 +14,7 @@ import Foundation
 /// - audioFormat: `[sampleRate: f64][channels: u32][framesPerPacket: u32][magic cookie]`
 ///   for the AAC stream that follows.
 /// - audioFrame: `[pts: u64 microseconds][one AAC packet]`.
+/// - snapshot: a JPEG of the window, sent in answer to a `snapshot` request.
 enum FrameType: UInt8 {
     case control = 1
     case videoFormat = 2
@@ -21,6 +22,8 @@ enum FrameType: UInt8 {
     case terminal = 4
     case audioFormat = 5
     case audioFrame = 6
+    /// A JPEG of a window tab's window, for the tab grid's preview.
+    case snapshot = 7
 }
 
 /// The AAC stream an agent sends for a window's app.
@@ -150,10 +153,12 @@ struct FrameReader {
 ///
 /// phone → agent: hello, list, open(windowID, viewport, zoom), input(event),
 ///                keyframe, pause, resume, terminal(name, cols, rows), resize(cols, rows),
-///                apps, launch(app, name)
+///                apps, launch(app, name), snapshot(width),
+///                device(device), devices, send(to, tab, name), forget(device)
 /// agent → phone: hello(machine, features), windows(windows), opened(windowID,
 ///                title, app, width, height), resized(width, height), closed,
-///                terminalOpened(name), exited, apps(apps), launched(app, url), error
+///                terminalOpened(name), exited, apps(apps), launched(app, url),
+///                inbox(sent), devices(devices), error
 struct Control: Codable, Equatable {
     var op: String
     var version: Int? = nil
@@ -183,6 +188,52 @@ struct Control: Codable, Equatable {
     /// The machine's Panes Web address (https://<name>.<tailnet>.ts.net:7443),
     /// which a relative `url` resolves against.
     var web: String? = nil
+    /// Tabs on other devices (docs/UI.md): this device and its open tabs, every
+    /// device the agent has heard from, a tab to send and who it's for, and
+    /// tabs sent to this device.
+    var device: DeviceInfo? = nil
+    var devices: [DeviceInfo]? = nil
+    var to: String? = nil
+    var tab: TabRef? = nil
+    var sent: [SentTab]? = nil
+}
+
+/// Enough to open the same tab somewhere else: the same window, the same tmux
+/// session, or the same Linux app session.
+struct TabRef: Codable, Equatable, Hashable {
+    /// The machine's name, as in machines.json.
+    var machine: String
+    /// window, terminal or app
+    var kind: String
+    /// What the tab is called: the app's name ("Xcode", "Terminal").
+    var app: String
+    var title: String? = nil
+    var windowID: UInt32? = nil
+    /// Terminal and app tabs: the session to attach to.
+    var session: String? = nil
+    /// App tabs: the app's id on the Linux box.
+    var appID: String? = nil
+}
+
+/// A phone or a browser running Panes, and the tabs it has open.
+struct DeviceInfo: Codable, Equatable {
+    /// Made up by the device once and kept.
+    var id: String
+    var name: String
+    /// phone or browser
+    var kind: String
+    var tabs: [TabRef]
+    /// When the agent last heard from it (seconds since 1970); the agent fills it in.
+    var seen: Double? = nil
+}
+
+/// A tab one device sent another, waiting until that device next checks in.
+struct SentTab: Codable, Equatable {
+    var id: String
+    /// The sending device's name.
+    var from: String
+    var tab: TabRef
+    var at: Double
 }
 
 /// An app a Linux box can start in its own Xpra session (from its .desktop file).
