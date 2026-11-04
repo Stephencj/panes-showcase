@@ -1,4 +1,5 @@
 import AppKit
+import CoreImage
 import Network
 import ScreenCaptureKit
 
@@ -71,7 +72,7 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
         switch msg.op {
         case "hello":
             var hello = Control(op: "hello", version: Wire.version, machine: Host.current().localizedName ?? "Mac",
-                                features: ["windows", "terminal"])
+                                features: ["windows", "terminal", "devices", "snapshot"])
             hello.web = Agent.peers.webAddress()
             send(hello)
             if let problem = Agent.permissionProblem() { send(Control(op: "error", error: problem)) }
@@ -106,6 +107,20 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
             audio?.paused = false
             audio?.resendFormat()
             requestKeyframe()
+        case "snapshot":
+            if let jpeg = snapshot(width: msg.width ?? 480) { sendRaw(Wire.encode(.snapshot, jpeg)) }
+        case "device":
+            guard let device = msg.device else { return }
+            send(Control(op: "inbox", sent: DeviceBook.shared.report(device)))
+        case "forget":
+            if let id = msg.device?.id { DeviceBook.shared.forget(id) }
+        case "devices":
+            send(Control(op: "devices", devices: DeviceBook.shared.list(except: msg.device?.id)))
+        case "send":
+            guard let tab = msg.tab, let to = msg.to else { return }
+            if !DeviceBook.shared.send(tab, to: to, from: msg.name ?? "Another device", id: UUID().uuidString) {
+                send(Control(op: "error", error: "That device hasn't checked in with this machine."))
+            }
         default:
             break
         }
@@ -272,6 +287,18 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
         }
         encoder?.encode(pixels, pts: pts, keyframe: wantKeyframe)
         wantKeyframe = false
+    }
+
+    private static let ciContext = CIContext()
+
+    /// The window's last picture as a JPEG `width` pixels wide, for previews.
+    private func snapshot(width: Double) -> Data? {
+        guard let lastPixels else { return nil }
+        let image = CIImage(cvPixelBuffer: lastPixels)
+        let scale = min(1, max(64, min(width, 1200)) / image.extent.width)
+        let small = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        return Self.ciContext.jpegRepresentation(of: small, colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                                 options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.7])
     }
 
     /// Screen capture only delivers frames when the window changes, so a still

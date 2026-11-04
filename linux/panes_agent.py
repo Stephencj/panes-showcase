@@ -385,6 +385,103 @@ WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 WS_CONT, WS_TEXT, WS_BINARY, WS_CLOSE, WS_PING, WS_PONG = 0, 1, 2, 8, 9, 10
 
 
+# ---- Tabs on other devices (docs/UI.md) --------------------------------------
+
+DEVICE_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+TAB_FIELDS = {"machine": str, "kind": str, "app": str, "title": str, "windowID": int, "session": str, "appID": str}
+
+
+def clean_tab(tab):
+    """Only the fields a TabRef has, of the right types; None if it isn't one."""
+    if not isinstance(tab, dict):
+        return None
+    out = {k: tab[k] for k, t in TAB_FIELDS.items()
+           if k in tab and isinstance(tab[k], t) and not isinstance(tab[k], bool)}
+    for k in ("machine", "kind", "app", "title", "session", "appID"):
+        if k in out:
+            out[k] = out[k][:200]
+    return out if all(k in out for k in ("machine", "kind", "app")) else None
+
+
+class DeviceBook:
+    """Phones and browsers using this agent, their open tabs, and tabs sent
+    between them. Same rules as Agent/Devices.swift."""
+    MAX_DEVICES, MAX_TABS, MAX_INBOX = 20, 60, 20
+    DEVICE_TTL = 30 * 24 * 3600
+    SENT_TTL = 7 * 24 * 3600
+
+    def __init__(self, path, now=time.time):
+        self.path = path
+        self.now = now
+        self.devices = []
+        self.inbox = {}
+        try:
+            with open(path) as f:
+                saved = json.load(f)
+            self.devices = [d for d in saved.get("devices", []) if isinstance(d, dict) and "id" in d]
+            self.inbox = {k: v for k, v in saved.get("inbox", {}).items() if isinstance(v, list)}
+        except (OSError, TypeError, ValueError, AttributeError):
+            pass
+
+    def report(self, device):
+        if not isinstance(device, dict) or not DEVICE_ID.match(str(device.get("id", ""))):
+            return []
+        did = device["id"]
+        tabs = [t for t in (clean_tab(t) for t in (device.get("tabs") or [])[:self.MAX_TABS]) if t]
+        d = {"id": did, "name": str(device.get("name") or "")[:60],
+             "kind": "phone" if device.get("kind") == "phone" else "browser",
+             "tabs": tabs, "seen": self.now()}
+        self.devices = [x for x in self.devices if x["id"] != did] + [d]
+        self._prune()
+        waiting = self.inbox.pop(did, [])
+        self._save()
+        return waiting
+
+    def list(self, except_id=None):
+        self._prune()
+        return sorted((d for d in self.devices if d["id"] != except_id), key=lambda d: -d.get("seen", 0))
+
+    def send(self, tab, to, sender, sid):
+        tab = clean_tab(tab)
+        if not tab or not DEVICE_ID.match(str(to or "")) or not any(d["id"] == to for d in self.devices):
+            return False
+        box = self.inbox.get(to, [])
+        if not any(x["id"] == sid for x in box):
+            box.append({"id": str(sid)[:64], "from": str(sender or "")[:60], "tab": tab, "at": self.now()})
+        self.inbox[to] = box[-self.MAX_INBOX:]
+        self._save()
+        return True
+
+    def forget(self, did):
+        self.devices = [d for d in self.devices if d["id"] != did]
+        self.inbox.pop(did, None)
+        self._save()
+
+    def _prune(self):
+        t = self.now()
+        self.devices = [d for d in self.devices if t - d.get("seen", 0) <= self.DEVICE_TTL]
+        if len(self.devices) > self.MAX_DEVICES:
+            self.devices = sorted(self.devices, key=lambda d: -d.get("seen", 0))[:self.MAX_DEVICES]
+        known = {d["id"] for d in self.devices}
+        self.inbox = {k: [x for x in v if t - x.get("at", 0) <= self.SENT_TTL]
+                      for k, v in self.inbox.items() if k in known}
+        self.inbox = {k: v for k, v in self.inbox.items() if v}
+
+    def _save(self):
+        if not self.path:
+            return
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        tmp = self.path + ".tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump({"devices": self.devices, "inbox": self.inbox}, f)
+        os.replace(tmp, self.path)
+
+
+DEVICES = DeviceBook(os.path.join(os.environ.get("PANES_STATE_DIR") or os.path.expanduser("~/.local/share/panes"),
+                                  "devices.json"))
+
+
 def ws_accept_key(key):
     """Sec-WebSocket-Accept for a client's Sec-WebSocket-Key."""
     return base64.b64encode(hashlib.sha1((key + WS_GUID).encode()).digest()).decode()
@@ -607,7 +704,7 @@ class Session:
     def handle(self, msg):
         op = msg.get("op")
         if op == "hello":
-            features = ["terminal"] + (["apps"] if XPRA.available else [])
+            features = ["terminal", "devices"] + (["apps"] if XPRA.available else [])
             reply = {"op": "hello", "version": VERSION, "machine": socket.gethostname(), "features": features}
             web = self.peers.web_address()
             if web:
@@ -644,6 +741,18 @@ class Session:
                 self.send(control({"op": "terminalOpened", "name": name}))
             except OSError as e:
                 self.send(control({"op": "error", "error": f"Couldn't start a shell: {e}"}))
+        elif op == "device":
+            self.send(control({"op": "inbox", "sent": DEVICES.report(msg.get("device"))}))
+        elif op == "devices":
+            me = (msg.get("device") or {}).get("id") if isinstance(msg.get("device"), dict) else None
+            self.send(control({"op": "devices", "devices": DEVICES.list(me)}))
+        elif op == "send":
+            if not DEVICES.send(msg.get("tab"), msg.get("to"), msg.get("name") or "Another device", secrets.token_hex(8)):
+                self.send(control({"op": "error", "error": "That device hasn't checked in with this machine."}))
+        elif op == "forget":
+            d = msg.get("device")
+            if isinstance(d, dict) and DEVICE_ID.match(str(d.get("id", ""))):
+                DEVICES.forget(d["id"])
         elif op == "resize" and self.terminal:
             self.terminal.resize(int(msg.get("cols") or 80), int(msg.get("rows") or 24))
 

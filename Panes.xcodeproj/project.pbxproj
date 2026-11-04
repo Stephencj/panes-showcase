@@ -25,6 +25,7 @@
 		456B61018428CB3DC04E3701 /* Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C02F4DF23EE0C9FC3FCD425 /* Geometry.swift */; };
 		48B29E080738A1F80CD8F866 /* VideoSamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2386EDDEE0862E84DFA0123E /* VideoSamples.swift */; };
 		4B9A7DE08AFF3628A17C8398 /* WebSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE9F01F98F476FCE6D94B652 /* WebSocket.swift */; };
+		4FEB9506D6EE61433DE70706 /* Devices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89AF0D7074B15CEF5F364B3E /* Devices.swift */; };
 		52E7055A13A42AB242EBE4B8 /* WebSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE9F01F98F476FCE6D94B652 /* WebSocket.swift */; };
 		5921249F148D3967E5B181A5 /* AudioSamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC51621000FBF63C276FFBCA /* AudioSamples.swift */; };
 		5C3627121D7E37EC021DE2B1 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8E0575BDFD4229FA1CE2407 /* Agent.swift */; };
@@ -42,6 +43,7 @@
 		A26F7DEDF058C3DD3936B13A /* Windows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03EE377F04F3A1E6A0F5221C /* Windows.swift */; };
 		A35CEE0D3D2B95CC31C63476 /* WebSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE9F01F98F476FCE6D94B652 /* WebSocket.swift */; };
 		AA2615C468D8567072C1D962 /* machines.json in Resources */ = {isa = PBXBuildFile; fileRef = 8477B62162D74E7EC47BBCD1 /* machines.json */; };
+		AA83AD5F51A0312BC4623F8C /* Devices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89AF0D7074B15CEF5F364B3E /* Devices.swift */; };
 		AD8E1FEA0FC04B267BFEC8C8 /* AudioCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B5E8E6B7260C5E0E375A2E /* AudioCapture.swift */; };
 		B0660B7D4B596C57528F9184 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFC7279A63EA921FE7F34724 /* main.swift */; };
 		BAEF7110D88A484C98435055 /* Peers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B29ECF9D87FE431CE9AF902 /* Peers.swift */; };
@@ -84,6 +86,7 @@
 		8289927C31790B63942935F0 /* PanesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PanesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		83A1DAD3FB296EB84D35FA0F /* AgentLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLink.swift; sourceTree = "<group>"; };
 		8477B62162D74E7EC47BBCD1 /* machines.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = machines.json; sourceTree = "<group>"; };
+		89AF0D7074B15CEF5F364B3E /* Devices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Devices.swift; sourceTree = "<group>"; };
 		97341ACCCA8D3BD786C61E8D /* Wire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Wire.swift; sourceTree = "<group>"; };
 		9C02F4DF23EE0C9FC3FCD425 /* Geometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geometry.swift; sourceTree = "<group>"; };
 		A195EE5DE2A149A4C42010FD /* WebHTTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebHTTP.swift; sourceTree = "<group>"; };
@@ -182,6 +185,7 @@
 				E8E0575BDFD4229FA1CE2407 /* Agent.swift */,
 				B2B5E8E6B7260C5E0E375A2E /* AudioCapture.swift */,
 				6C74F8DDF909E4914F5A5ACD /* AudioEncoder.swift */,
+				89AF0D7074B15CEF5F364B3E /* Devices.swift */,
 				1A731BA840E4FB5A78CD9DE6 /* Encoder.swift */,
 				48031D791F28DFE00ABB58F1 /* Input.swift */,
 				2B29ECF9D87FE431CE9AF902 /* Peers.swift */,
@@ -382,6 +386,7 @@
 				AD8E1FEA0FC04B267BFEC8C8 /* AudioCapture.swift in Sources */,
 				3F7950537F8576486A45CDB1 /* AudioEncoder.swift in Sources */,
 				5921249F148D3967E5B181A5 /* AudioSamples.swift in Sources */,
+				AA83AD5F51A0312BC4623F8C /* Devices.swift in Sources */,
 				29C88887B13CF7E04090EB4E /* Encoder.swift in Sources */,
 				8450F9E26DF792807692491E /* Geometry.swift in Sources */,
 				E82B6291539C4B42074DB27F /* Input.swift in Sources */,
@@ -429,6 +434,7 @@
 			files = (
 				FA0148305C13DB28704A32BC /* AudioEncoder.swift in Sources */,
 				3CEC462C2B29525CAF5B3B44 /* AudioSamples.swift in Sources */,
+				4FEB9506D6EE61433DE70706 /* Devices.swift in Sources */,
 				99908B1AD88E17E3265E03C2 /* Encoder.swift in Sources */,
 				456B61018428CB3DC04E3701 /* Geometry.swift in Sources */,
 				C1AEE6FB4910D43BD905508D /* Keys.swift in Sources */,
