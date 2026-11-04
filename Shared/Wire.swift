@@ -225,6 +225,24 @@ struct DeviceInfo: Codable, Equatable {
     var tabs: [TabRef]
     /// When the agent last heard from it (seconds since 1970); the agent fills it in.
     var seen: Double? = nil
+
+    init(id: String, name: String, kind: String, tabs: [TabRef], seen: Double? = nil) {
+        self.id = id
+        self.name = name
+        self.kind = kind
+        self.tabs = tabs
+        self.seen = seen
+    }
+
+    /// `devices` and `forget` only need the id (docs/UI.md), so the rest may be missing.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? "browser"
+        tabs = try c.decodeIfPresent([TabRef].self, forKey: .tabs) ?? []
+        seen = try c.decodeIfPresent(Double.self, forKey: .seen)
+    }
 }
 
 /// A tab one device sent another, waiting until that device next checks in.

@@ -12,8 +12,12 @@ final class AgentLink {
         case terminal(Data)
         case audioFormat(AudioFormat)
         case audio(ptsMicros: UInt64, packet: Data)
+        case snapshot(Data)
         case failed(String)
     }
+
+    /// Tests aim the app at a side agent with PANES_PORT.
+    static let port: UInt16 = ProcessInfo.processInfo.environment["PANES_PORT"].flatMap(UInt16.init) ?? Wire.port
 
     private let hosts: [String]
     private let queue = DispatchQueue(label: "panes.link")
@@ -54,7 +58,10 @@ final class AgentLink {
         let tcp = NWProtocolTCP.Options()
         tcp.noDelay = true
         tcp.connectionTimeout = 4
-        let c = NWConnection(host: NWEndpoint.Host(hosts[i]), port: NWEndpoint.Port(rawValue: Wire.port)!,
+        // "host:port" picks a port (tests run several agents on one Mac).
+        let parts = hosts[i].split(separator: ":")
+        let (host, port) = parts.count == 2 && UInt16(parts[1]) != nil ? (String(parts[0]), UInt16(parts[1])!) : (hosts[i], Self.port)
+        let c = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!,
                              using: NWParameters(tls: nil, tcp: tcp))
         var settled = false
         c.stateUpdateHandler = { [weak self] state in
@@ -115,6 +122,8 @@ final class AgentLink {
             if let a = Wire.parseAudioFormat(f.payload) { emit(.audioFormat(a)) }
         case .audioFrame:
             if let a = Wire.parseAudioFrame(f.payload) { emit(.audio(ptsMicros: a.ptsMicros, packet: a.packet)) }
+        case .snapshot:
+            emit(.snapshot(f.payload))
         }
     }
 

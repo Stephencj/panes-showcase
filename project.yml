@@ -44,6 +44,21 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Panes connects to your Mac on the home network when Tailscale isn't available."
 
+  # Taps and swipes through the phone UI against side agents: tools/ios-e2e/run.sh
+  PanesUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - UITests
+      - Shared/Wire.swift
+    dependencies:
+      - target: Panes
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stephencjuliano.panes.uitests
+        TEST_TARGET_NAME: Panes
+
   # Runs on each Mac (launchd, at login) and streams its windows.
   PanesAgent:
     type: application
@@ -102,6 +117,8 @@ schemes:
     build:
       targets:
         Panes: all
+    test:
+      targets: [PanesUITests]
   PanesAgent:
     build:
       targets:

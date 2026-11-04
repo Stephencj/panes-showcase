@@ -421,10 +421,86 @@ final class DeviceBookTests: XCTestCase {
         XCTAssertEqual(perms, 0o600)
     }
 
+    func testIdOnlyDeviceDecodes() throws {
+        let msg = try JSONDecoder().decode(Control.self, from: Data(#"{"op":"forget","device":{"id":"web-1"}}"#.utf8))
+        XCTAssertEqual(msg.device?.id, "web-1")
+        XCTAssertEqual(msg.device?.tabs, [])
+    }
+
     func testDeviceMessagesRoundTrip() throws {
         let msg = Control(op: "send", name: "iPhone", to: "web-1",
                           tab: TabRef(machine: "linux-box", kind: "app", app: "Calculator", session: "panes-abc123", appID: "org.gnome.Calculator"))
         let back = try JSONDecoder().decode(Control.self, from: try JSONEncoder().encode(msg))
         XCTAssertEqual(back, msg)
+    }
+}
+
+final class FlowTests: XCTestCase {
+    private func win(_ title: String, id: UInt32 = 1, machine: String = "Mac mini") -> TabRef {
+        TabRef(machine: machine, kind: "window", app: "Xcode", title: title, windowID: id)
+    }
+
+    func testRecentsAreNewestFirstWithoutRepeatsAndCapped() {
+        var list: [TabRef] = []
+        list = Flow.addRecent(win("A"), to: list)
+        list = Flow.addRecent(TabRef(machine: "linux-box", kind: "terminal", app: "Terminal", session: "panes-1"), to: list)
+        list = Flow.addRecent(win("A", id: 99), to: list)   // same window title, new id: moves to the top
+        list = Flow.addRecent(TabRef(machine: "linux-box", kind: "terminal", app: "Terminal", session: "panes-2"), to: list)
+        XCTAssertEqual(list.map(\.kind), ["terminal", "window"])
+        XCTAssertEqual(list[1].windowID, 99)
+        for i in 0..<20 { list = Flow.addRecent(win("W\(i)"), to: list) }
+        XCTAssertEqual(list.count, Flow.recentLimit)
+        XCTAssertEqual(list.first?.title, "W19")
+    }
+
+    func testSameTabMeansSameWindowOrSession() {
+        XCTAssertTrue(Flow.sameTab(win("A", id: 5), win("B", id: 5)))
+        XCTAssertFalse(Flow.sameTab(win("A", id: 5), win("A", id: 6)))
+        XCTAssertFalse(Flow.sameTab(win("A", id: 5), win("A", id: 5, machine: "linux-box")))
+        let t1 = TabRef(machine: "linux-box", kind: "terminal", app: "Terminal", session: "panes-a")
+        var t2 = t1
+        XCTAssertTrue(Flow.sameTab(t1, t2))
+        t2.session = "panes-b"
+        XCTAssertFalse(Flow.sameTab(t1, t2))
+        XCTAssertFalse(Flow.sameTab(TabRef(machine: "m", kind: "app", app: "x"), TabRef(machine: "m", kind: "app", app: "x")))
+    }
+
+    func testDeviceListsMergeByNewestAndSkipMe() {
+        let mac = [DeviceInfo(id: "web", name: "Old name", kind: "browser", tabs: [], seen: 10),
+                   DeviceInfo(id: "me", name: "iPhone", kind: "phone", tabs: [], seen: 50)]
+        let fedora = [DeviceInfo(id: "web", name: "Chrome on Linux", kind: "browser", tabs: [win("A")], seen: 20),
+                      DeviceInfo(id: "pad", name: "iPad", kind: "phone", tabs: [], seen: 30)]
+        let merged = Flow.merge([mac, fedora], except: "me")
+        XCTAssertEqual(merged.map(\.id), ["pad", "web"])
+        XCTAssertEqual(merged[1].name, "Chrome on Linux")
+        XCTAssertEqual(merged[1].tabs.count, 1)
+    }
+
+    func testSearchNeedsEveryWordSomewhere() {
+        XCTAssertTrue(Flow.matches("", ["anything"]))
+        XCTAssertTrue(Flow.matches("xc", ["Xcode", "Mac mini"]))
+        XCTAssertTrue(Flow.matches("term fedora", ["Terminal", nil, "linux-box"]))
+        XCTAssertFalse(Flow.matches("term mac", ["Terminal", "linux-box"]))
+    }
+
+    func testColoursParse() {
+        let c = Flow.rgb("#5B9BFF")
+        XCTAssertEqual(c?.0 ?? 0, 91.0 / 255, accuracy: 0.001)
+        XCTAssertEqual(c?.2 ?? 0, 1, accuracy: 0.001)
+        XCTAssertNil(Flow.rgb("5B9BFF"))
+        XCTAssertNil(Flow.rgb("#12"))
+        XCTAssertNil(Flow.rgb(nil))
+    }
+
+    func testArrivalsThroughSeveralMachinesCountOnce() {
+        var f = ArrivalFilter()
+        let t0 = Date()
+        let s = SentTab(id: "a", from: "Chrome", tab: win("A", id: 3), at: 1)
+        var other = s
+        other.id = "b"   // the same send, picked up through another machine
+        XCTAssertTrue(f.admit(s, now: t0))
+        XCTAssertFalse(f.admit(other, now: t0.addingTimeInterval(5)))
+        XCTAssertTrue(f.admit(SentTab(id: "c", from: "Chrome", tab: win("B", id: 4), at: 2), now: t0))
+        XCTAssertTrue(f.admit(other, now: t0.addingTimeInterval(700)))   // much later it's a new send
     }
 }

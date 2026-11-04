@@ -11,13 +11,28 @@ struct Machine: Identifiable, Hashable, Codable {
     var hosts: [String]
     /// Its Panes Web address, which Linux app tabs load through.
     var web: String?
+    /// Its colour everywhere in the UI (docs/UI.md).
+    var color: String?
+
+    var tint: SwiftUI.Color {
+        let c = Flow.rgb(color) ?? (0.64, 0.66, 0.70)
+        return SwiftUI.Color(red: c.0, green: c.1, blue: c.2)
+    }
+
+    static func named(_ name: String) -> Machine? { defaults.first { $0.name == name } }
 
     /// From Shared/machines.json, the same list Panes Web uses.
     static let defaults: [Machine] = {
-        // Tests point the app at agents on this Mac with PANES_HOSTS=127.0.0.1.
+        // Tests point the app at agents on this Mac with PANES_HOSTS=127.0.0.1,
+        // or at a whole list with PANES_MACHINES=<path to a machines.json>.
+        if let path = ProcessInfo.processInfo.environment["PANES_MACHINES"],
+           let data = FileManager.default.contents(atPath: path),
+           let list = try? JSONDecoder().decode([Machine].self, from: data) {
+            return list
+        }
         if let hosts = ProcessInfo.processInfo.environment["PANES_HOSTS"] {
             return [Machine(name: "Mac mini", hosts: hosts.split(separator: ",").map(String.init),
-                            web: ProcessInfo.processInfo.environment["PANES_WEB"])]
+                            web: ProcessInfo.processInfo.environment["PANES_WEB"], color: "#5B9BFF")]
         }
         guard let url = Bundle.main.url(forResource: "machines", withExtension: "json"),
               let data = try? Data(contentsOf: url),
@@ -47,6 +62,8 @@ final class PaneTab: ObservableObject, Identifiable {
     @Published var notice: String?
     /// The Mac window's size in points, which sets the video's shape.
     @Published var windowSize: CGSize
+    /// What the tab grid shows for it.
+    @Published var preview: UIImage?
 
     let renderer = AVSampleBufferDisplayLayer()
     /// Terminal tabs keep their view (and its scrollback) across tab switches.
@@ -78,6 +95,36 @@ final class PaneTab: ObservableObject, Identifiable {
     private var format: CMVideoFormatDescription?
     private var active = true
     private var waitingForKeyframe = true
+
+    /// How another device (or a later visit) opens the same thing.
+    var ref: TabRef {
+        switch kind {
+        case .window(let w):
+            TabRef(machine: machine.name, kind: "window", app: w.app, title: title, windowID: w.id)
+        case .terminal(let session):
+            TabRef(machine: machine.name, kind: "terminal", app: "Terminal", title: title, session: session)
+        case .app(let a, let session):
+            TabRef(machine: machine.name, kind: "app", app: a.name, title: title, session: session, appID: a.id)
+        }
+    }
+
+    /// Refreshes `preview`: window tabs ask the agent for a picture of the
+    /// window; terminals and apps draw their own view.
+    func requestPreview() {
+        switch kind {
+        case .window:
+            link?.send(Control(op: "snapshot", width: 480))
+        case .terminal:
+            let v = terminalView
+            guard v.bounds.width > 0 else { return }
+            preview = UIGraphicsImageRenderer(bounds: v.bounds).image { _ in v.drawHierarchy(in: v.bounds, afterScreenUpdates: false) }
+        case .app:
+            guard webView.bounds.width > 0 else { return }
+            webView.takeSnapshot(with: nil) { [weak self] image, _ in
+                if let image { self?.preview = image }
+            }
+        }
+    }
 
     var appName: String {
         switch kind {
@@ -170,7 +217,7 @@ final class PaneTab: ObservableObject, Identifiable {
             case .window(let w):
                 let vp = fitToPhone ? Size(width: viewport.width, height: viewport.height) : nil
                 link?.send(Control(op: "open", windowID: w.id, viewport: vp,
-                                   audio: UserDefaults.standard.object(forKey: "streamAudio") as? Bool ?? true))
+                                   audio: Store.setting("streamAudio")))
                 if !active { link?.send(Control(op: "pause")) }
             case .terminal(let session):
                 let t = terminalView.getTerminal()
@@ -233,6 +280,8 @@ final class PaneTab: ObservableObject, Identifiable {
             if let sample = VideoSamples.sample(avcc, format: format, ptsMicros: pts) {
                 renderer.sampleBufferRenderer.enqueue(sample)
             }
+        case .snapshot(let jpeg):
+            if let image = UIImage(data: jpeg) { preview = image }
         case .failed(let why):
             if status != .closed { status = .failed(why) }
         }
@@ -271,51 +320,305 @@ final class TerminalBridge: NSObject, TerminalViewDelegate {
 final class Store: ObservableObject {
     @Published var tabs: [PaneTab] = []
     @Published var selected: UUID?
+    /// Phones and browsers elsewhere, and their tabs (docs/UI.md).
+    @Published var otherDevices: [DeviceInfo] = []
+    @Published var notice: Notice?
+    @Published var recents: [TabRef] = Store.loadRecents()
+    @Published var deviceName: String = UserDefaults.standard.string(forKey: "deviceName") ?? "iPhone" {
+        didSet {
+            UserDefaults.standard.set(deviceName, forKey: "deviceName")
+            scheduleSync()
+        }
+    }
+    /// The size tabs get on screen, which fitted windows are shaped to.
+    var viewport = CGSize(width: 393, height: 700)
+
+    struct Notice: Identifiable, Equatable {
+        let id = UUID()
+        var text: String
+        /// Tapping it switches to this tab.
+        var tab: UUID?
+    }
+
+    /// Made up once and kept: how other devices address this one.
+    let deviceID: String = {
+        if let id = UserDefaults.standard.string(forKey: "deviceID") { return id }
+        let id = "phone-" + UUID().uuidString.lowercased()
+        UserDefaults.standard.set(id, forKey: "deviceID")
+        return id
+    }()
+
+    private var arrivals = ArrivalFilter()
+    private var syncTask: Task<Void, Never>?
+    private var heartbeat: Task<Void, Never>?
+    private var noticeTask: Task<Void, Never>?
+    private var deviceLists: [String: [DeviceInfo]] = [:]
 
     var current: PaneTab? { tabs.first { $0.id == selected } }
+    var currentIndex: Int? { tabs.firstIndex { $0.id == selected } }
 
-    func open(_ window: WindowInfo, on machine: Machine, fit: Bool, viewport: CGSize) {
-        add(PaneTab(machine: machine, kind: .window(window), fitToPhone: fit), viewport: viewport)
+    func open(_ window: WindowInfo, on machine: Machine, fit: Bool, viewport: CGSize? = nil) {
+        if let have = existing(TabRef(machine: machine.name, kind: "window", app: window.app, windowID: window.id)) {
+            return select(have.id)
+        }
+        add(PaneTab(machine: machine, kind: .window(window), fitToPhone: fit), viewport: viewport ?? self.viewport)
     }
 
-    func openTerminal(on machine: Machine) {
-        add(PaneTab(machine: machine, kind: .terminal(session: Self.newSessionName())), viewport: .zero)
+    func openTerminal(on machine: Machine, session: String? = nil) {
+        add(PaneTab(machine: machine, kind: .terminal(session: session ?? Self.newSessionName())), viewport: .zero)
     }
 
-    func openApp(_ app: AppInfo, on machine: Machine) {
-        add(PaneTab(machine: machine, kind: .app(app, session: Self.newSessionName())), viewport: .zero)
+    func openApp(_ app: AppInfo, on machine: Machine, session: String? = nil) {
+        add(PaneTab(machine: machine, kind: .app(app, session: session ?? Self.newSessionName())), viewport: .zero)
     }
+
+    /// Opens a tab another device has (or sent): the same window, tmux
+    /// session or app session. Switches to it if it's already open here.
+    @discardableResult
+    func open(_ ref: TabRef, select: Bool = true) -> PaneTab? {
+        if let have = existing(ref) {
+            if select { self.select(have.id) }
+            return have
+        }
+        guard let machine = Machine.named(ref.machine) else {
+            flash("\(ref.machine) isn't one of this phone's machines.")
+            return nil
+        }
+        let kind: PaneTab.Kind
+        switch ref.kind {
+        case "window":
+            guard let id = ref.windowID else { return nil }
+            kind = .window(WindowInfo(id: id, app: ref.app, bundleID: "", title: ref.title ?? ref.app, width: 0, height: 0))
+        case "terminal":
+            kind = .terminal(session: ref.session ?? Self.newSessionName())
+        default:
+            guard let appID = ref.appID else { return nil }
+            kind = .app(AppInfo(id: appID, name: ref.app), session: ref.session ?? Self.newSessionName())
+        }
+        let tab = PaneTab(machine: machine, kind: kind, fitToPhone: Self.fitWindows)
+        add(tab, viewport: viewport, select: select)
+        return tab
+    }
+
+    static var fitWindows: Bool { setting("fitWindows") }
+
+    /// A switch in Settings, on unless turned off (`bool(forKey:)` also reads
+    /// "NO" passed on the command line by tests).
+    static func setting(_ key: String) -> Bool {
+        UserDefaults.standard.object(forKey: key) == nil ? true : UserDefaults.standard.bool(forKey: key)
+    }
+
+    func existing(_ ref: TabRef) -> PaneTab? { tabs.first { Flow.sameTab($0.ref, ref) } }
 
     private static func newSessionName() -> String { "panes-" + UUID().uuidString.prefix(6).lowercased() }
 
-    private func add(_ tab: PaneTab, viewport: CGSize) {
+    private func add(_ tab: PaneTab, viewport: CGSize, select: Bool = true) {
         tab.viewport = viewport
         tabs.append(tab)
-        select(tab.id)
+        if select || selected == nil { self.select(tab.id) } else { tab.setActive(false) }
         tab.connect()
+        remember(tab.ref)
+        scheduleSync()
     }
 
     func select(_ id: UUID) {
+        // The tab being left keeps a fresh picture for the tab grid.
+        if let leaving = current, leaving.id != id { leaving.requestPreview() }
         selected = id
         for t in tabs { t.setActive(t.id == id) }
     }
 
+    /// The next or previous tab (swiping the pill).
+    func move(by step: Int) {
+        guard let i = currentIndex else { return }
+        let j = i + step
+        guard tabs.indices.contains(j) else { return }
+        select(tabs[j].id)
+    }
+
     func close(_ tab: PaneTab) {
-        tab.end()
+        // A terminal or app another device still has open keeps running for it.
+        let shared = otherDevices.contains { $0.tabs.contains { Flow.sameTab($0, tab.ref) } }
+        if !shared { tab.end() }
         // Give the "end" a moment to go out before the socket closes.
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(300))
             tab.close()
         }
+        let i = tabs.firstIndex { $0.id == tab.id } ?? 0
         tabs.removeAll { $0.id == tab.id }
-        if selected == tab.id { selected = tabs.last?.id }
+        if selected == tab.id { selected = tabs.isEmpty ? nil : tabs[min(i, tabs.count - 1)].id }
         if let s = selected { select(s) }
+        scheduleSync()
     }
+
+    func refreshPreviews() { for t in tabs { t.requestPreview() } }
 
     /// iOS drops sockets while the app is in the background; coming back
     /// reconnects every tab to the same window or tmux session.
     func reconnectAll() {
         for t in tabs where t.status != .live && t.status != .closed { t.connect() }
+        scheduleSync()
+    }
+
+    // MARK: recents
+
+    private func remember(_ ref: TabRef) {
+        recents = Flow.addRecent(ref, to: recents)
+        if let data = try? JSONEncoder().encode(recents) { UserDefaults.standard.set(data, forKey: "recents") }
+    }
+
+    private static func loadRecents() -> [TabRef] {
+        guard let data = UserDefaults.standard.data(forKey: "recents") else { return [] }
+        return (try? JSONDecoder().decode([TabRef].self, from: data)) ?? []
+    }
+
+    // MARK: notices
+
+    /// UI tests hold notices longer (PANES_NOTICE_SECONDS) so they can read them.
+    static let noticeSeconds = ProcessInfo.processInfo.environment["PANES_NOTICE_SECONDS"].flatMap(Double.init) ?? 5
+
+    func flash(_ text: String, tab: UUID? = nil) {
+        NSLog("panes notice: %@", text)
+        let n = Notice(text: text, tab: tab)
+        notice = n
+        noticeTask?.cancel()
+        noticeTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Self.noticeSeconds))
+            if self.notice?.id == n.id { self.notice = nil }
+        }
+    }
+
+    // MARK: other devices
+
+    var me: DeviceInfo { DeviceInfo(id: deviceID, name: deviceName, kind: "phone", tabs: tabs.map(\.ref)) }
+
+    /// Check in with every machine soon (changes come in bursts).
+    func scheduleSync() {
+        syncTask?.cancel()
+        syncTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            self.syncNow()
+        }
+    }
+
+    /// While the app is in use, check in every 15 s so other devices' tabs stay current.
+    func setForeground(_ on: Bool) {
+        heartbeat?.cancel()
+        heartbeat = nil
+        guard on else { return }
+        heartbeat = Task { @MainActor in
+            while !Task.isCancelled {
+                self.syncNow()
+                try? await Task.sleep(for: .seconds(15))
+            }
+        }
+    }
+
+    func syncNow() {
+        let me = self.me
+        for machine in Machine.defaults {
+            AgentCall.run(machine) { call, hello in
+                guard hello.features?.contains("devices") == true else { return call.finish() }
+                call.send(Control(op: "device", device: me))
+            } onReply: { [weak self] call, msg in
+                switch msg.op {
+                case "inbox":
+                    self?.received(msg.sent ?? [])
+                    call.send(Control(op: "devices", device: DeviceInfo(id: me.id, name: me.name, kind: "phone", tabs: [])))
+                case "devices":
+                    self?.heard(msg.devices ?? [], from: machine)
+                    call.finish()
+                default:
+                    break
+                }
+            }
+        }
+    }
+
+    private func heard(_ list: [DeviceInfo], from machine: Machine) {
+        deviceLists[machine.name] = list
+        let merged = Flow.merge(Array(deviceLists.values), except: deviceID)
+        if merged != otherDevices { otherDevices = merged }
+    }
+
+    private func received(_ sent: [SentTab]) {
+        for s in sent where arrivals.admit(s) {
+            if let tab = open(s.tab, select: false) {
+                flash("\(s.tab.app) arrived from \(s.from)", tab: tab.id)
+            }
+        }
+    }
+
+    /// Leaves the tab with `device` through every machine (whichever it
+    /// checks in with first delivers it).
+    func send(_ tab: PaneTab, to device: DeviceInfo) {
+        let msg = Control(op: "send", name: deviceName, to: device.id, tab: tab.ref)
+        var delivered = false
+        var pending = Machine.defaults.count
+        for machine in Machine.defaults {
+            AgentCall.run(machine) { call, hello in
+                guard hello.features?.contains("devices") == true else { return call.finish() }
+                call.send(msg)
+                // `send` has no answer unless it failed; a quick devices call confirms it went through.
+                call.send(Control(op: "devices", device: DeviceInfo(id: self.deviceID, name: "", kind: "phone", tabs: [])))
+            } onReply: { call, reply in
+                if reply.op == "devices" { delivered = true; call.finish() }
+                if reply.op == "error" { call.finish() }
+            } onDone: { [weak self] in
+                pending -= 1
+                guard pending == 0, let self else { return }
+                self.flash(delivered ? "Sent. \(tab.appName) is waiting in Panes on \(device.name)."
+                                     : "Couldn't reach any machine to send it.")
+            }
+        }
+    }
+}
+
+/// A short conversation with one machine's agent: hello, a few messages, done.
+@MainActor
+final class AgentCall {
+    private var link: AgentLink?
+    private var done = false
+    private let onDone: () -> Void
+
+    private init(onDone: @escaping () -> Void) { self.onDone = onDone }
+
+    static func run(_ machine: Machine,
+                    afterHello: @escaping (AgentCall, Control) -> Void,
+                    onReply: @escaping (AgentCall, Control) -> Void,
+                    onDone: @escaping () -> Void = {}) {
+        let call = AgentCall(onDone: onDone)
+        let link = AgentLink(hosts: machine.hosts) { e in
+            switch e {
+            case .ready:
+                call.send(Control(op: "hello", version: Wire.version))
+            case .control(let msg):
+                if msg.op == "hello" { afterHello(call, msg) } else { onReply(call, msg) }
+            case .failed:
+                call.finish()
+            default:
+                break
+            }
+        }
+        call.link = link
+        link.connect()
+        // Never hang around: a machine that's slow to answer is skipped this time.
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(8))
+            call.finish()
+        }
+    }
+
+    func send(_ msg: Control) { link?.send(msg) }
+
+    func finish() {
+        guard !done else { return }
+        done = true
+        link?.close()
+        link = nil
+        onDone()
     }
 }
 
