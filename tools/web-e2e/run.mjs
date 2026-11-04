@@ -655,6 +655,12 @@ async function main() {
   check('a tab this device already has says Switch', (await card.locator('.pill').textContent()) === 'Switch');
   await page.keyboard.press('Escape');
   check('Esc closes the panel', await page.isHidden('#devices'));
+  // Closing a terminal another device still has open leaves it running there.
+  const markShare = await page.evaluate(() => window.__sent.length);
+  await page.locator('#tabs .tab').nth(3).locator('.x').click();
+  await sleep(500);
+  check('closing a tab another device still has sends no end, and tmux keeps the session',
+    (await sentSince(page, markShare, 'end')).length === 0 && tmuxSessions().includes(sessionB) && (await tabInfo(page)).length === 3);
 
   // A sends its window B to B. Both machines keep a copy; B shows it once.
   await page.locator('#tabs .tab').nth(2).locator('.open').click();
@@ -705,9 +711,10 @@ async function main() {
   check('tab changes are reported (to every machine)', (await pageB.evaluate(() => window.__sent.filter((m) => m.op === 'device').length)) >= nDevice + 2 && lastReport === 1);
   // A sees B's new name and tabs; B sees A.
   await pageB.click('#devicesButton');
-  await until('A in B\'s panel', async () => (await pageB.locator(`#devicesList .device[data-device="${ids[0].id}"] .device-tab`).count()) === 4, 10000).catch(() => {});
-  check('B lists A\'s four tabs, with Switch for the one it has', (await pageB.locator(`#devicesList .device[data-device="${ids[0].id}"] .device-tab`).count()) === 4
-    && (await pageB.locator(`#devicesList .device[data-device="${ids[0].id}"] .pill`, { hasText: 'Switch' }).count()) === 1);
+  // A has three tabs (it closed its copy of B's terminal); B has none of them.
+  await until('A in B\'s panel', async () => (await pageB.locator(`#devicesList .device[data-device="${ids[0].id}"] .device-tab`).count()) === 3, 10000).catch(() => {});
+  check('B lists A\'s three tabs, each with Open here', (await pageB.locator(`#devicesList .device[data-device="${ids[0].id}"] .device-tab`).count()) === 3
+    && (await pageB.locator(`#devicesList .device[data-device="${ids[0].id}"] .pill`, { hasText: 'Open here' }).count()) === 3);
   await pageB.setViewportSize({ width: 800, height: 600 });
   await sleep(300);
   await shot(pageB, '10-narrow-other-devices');
@@ -752,9 +759,12 @@ async function main() {
     await sleep(400);
   }
   check('all tabs closed, empty state back', (await tabInfo(page)).length === 0 && await page.isVisible('#empty'));
-  await until('tmux sessions gone', async () => !tmuxSessions().includes(session) && !tmuxSessions().includes(sessionB), 6000).catch(() => {});
-  check('closing terminal tabs ends their tmux sessions', !tmuxSessions().includes(session) && !tmuxSessions().includes(sessionB));
+  await until('tmux session gone', async () => !tmuxSessions().includes(session), 6000).catch(() => {});
+  check('closing a terminal tab ends its tmux session', !tmuxSessions().includes(session));
+  check('…but not one B still has open', tmuxSessions().includes(sessionB));
   await pageB.locator('#tabs .tab .x').first().click().catch(() => {});
+  await until('B\'s session gone', async () => !tmuxSessions().includes(sessionB), 6000).catch(() => {});
+  check('when the last device closes it, the session ends', !tmuxSessions().includes(sessionB));
 
   // Tidy the side agents' device books.
   await page.evaluate(() => window.panes.devices.forget());

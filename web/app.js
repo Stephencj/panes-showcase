@@ -966,6 +966,9 @@ class Store {
     $('tabs').querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
+  /// Set by start(): whether another device lists this tab as open.
+  sharedElsewhere() { return false; }
+
   /// The next (+1) or previous (-1) tab, round the ends.
   step(by) {
     if (this.tabs.length < 2) return;
@@ -974,7 +977,8 @@ class Store {
   }
 
   close(tab) {
-    tab.end();
+    // A terminal or app another device still has open keeps running for it.
+    if (!this.sharedElsewhere(tab.ref())) tab.end();
     // Give the "end" a moment to go out before the socket closes.
     setTimeout(() => tab.close(), 300);
     tab.el.classList.remove('active');
@@ -1707,6 +1711,7 @@ async function start() {
   const devices = new Devices(store, machines);
   const settings = new Settings(devices);
   const panel = new DevicesPanel(store, devices, settings);
+  store.sharedElsewhere = (ref) => devices.list.some((d) => (d.tabs || []).some((t) => sameRef(t, ref)));
   store.onChange = () => {
     devices.changed();
     panel.render();

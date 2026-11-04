@@ -5,165 +5,348 @@ struct PanesApp: App {
     @StateObject private var store = Store()
     @Environment(\.scenePhase) private var phase
 
-    init() { AudioPlayer.configureSession() }
+    init() {
+        AudioPlayer.configureSession()
+        // UI tests: no animations, so XCUITest isn't left waiting for the app to settle.
+        if ProcessInfo.processInfo.environment["PANES_UITEST"] != nil { UIView.setAnimationsEnabled(false) }
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
                 .preferredColorScheme(.dark)
-                .onAppear(perform: autoOpen)
+                .onAppear {
+                    store.setForeground(true)
+                    autoOpen()
+                }
         }
         .onChange(of: phase) { _, now in
             if now == .active { store.reconnectAll() }
+            store.setForeground(now == .active)
         }
     }
 
-    /// For tests: PANES_OPEN="<title text>" opens that window on the first machine
-    /// at launch; PANES_TERMINAL=<command> opens a terminal there and types the command;
-    /// PANES_APP=<name> launches that Linux app.
+    /// For tests, on the first machine at launch:
+    /// - PANES_OPEN="<title>|<title>…" opens those windows, in order;
+    /// - PANES_TERMINAL=<command> opens a terminal and types the command;
+    /// - PANES_APP=<name> launches that Linux app (PANES_TYPE=<text> then types into it);
+    /// - PANES_DEVICE_NAME names this device; PANES_SHOW=grid|search|send|settings
+    ///   opens that screen once the tabs are up (PANES_QUERY fills the search).
     private func autoOpen() {
         let env = ProcessInfo.processInfo.environment
-        let machine = Machine.defaults[0]
-        if let command = env["PANES_TERMINAL"], store.tabs.isEmpty {
-            store.openTerminal(on: machine)
-            Task { @MainActor in
+        guard store.tabs.isEmpty, let machine = Machine.defaults.first else { return }
+        if let name = env["PANES_DEVICE_NAME"] { store.deviceName = name }
+        Task { @MainActor in
+            if let command = env["PANES_TERMINAL"] {
+                store.openTerminal(on: machine)
+                let tab = store.current
                 try? await Task.sleep(for: .seconds(2))
-                store.current?.sendTerminal(Data((command + "\r").utf8))
+                tab?.sendTerminal(Data((command + "\r").utf8))
             }
-            return
-        }
-        if let appName = env["PANES_APP"], store.tabs.isEmpty {
-            // PANES_APP="<app name>": launch that Linux app from the first machine.
-            let list = WindowList()
-            list.load(machine)
-            Task { @MainActor in
+            if env["PANES_APP"] != nil || env["PANES_OPEN"] != nil {
+                let list = WindowList()
+                list.load(machine)
                 for _ in 0..<50 where list.loading { try? await Task.sleep(for: .milliseconds(200)) }
-                if let a = list.apps.first(where: { $0.name.localizedCaseInsensitiveContains(appName) }) {
+                for needle in (env["PANES_OPEN"] ?? "").split(separator: "|").map(String.init) {
+                    if let w = list.windows.first(where: { $0.title.localizedCaseInsensitiveContains(needle) }) {
+                        store.open(w, on: machine, fit: Store.fitWindows)
+                        try? await Task.sleep(for: .seconds(1))
+                    }
+                }
+                if let appName = env["PANES_APP"],
+                   let a = list.apps.first(where: { $0.name.localizedCaseInsensitiveContains(appName) }) {
                     store.openApp(a, on: machine)
-                    // PANES_TYPE="<text>": type it into the app once it's up (tests the key path).
                     if let text = env["PANES_TYPE"] {
+                        let tab = store.current
                         try? await Task.sleep(for: .seconds(10))
-                        store.current?.sendToPage(InputEvent(kind: "text", text: text))
+                        tab?.sendToPage(InputEvent(kind: "text", text: text))
                     }
                 }
             }
-            return
-        }
-        guard let needle = env["PANES_OPEN"], store.tabs.isEmpty else { return }
-        let list = WindowList()
-        list.load(machine)
-        Task { @MainActor in
-            for _ in 0..<50 where list.loading { try? await Task.sleep(for: .milliseconds(200)) }
-            if let w = list.windows.first(where: { $0.title.localizedCaseInsensitiveContains(needle) }) {
-                store.open(w, on: machine, fit: true, viewport: CGSize(width: 393, height: 700))
+            if let show = env["PANES_SHOW"] {
+                try? await Task.sleep(for: .seconds(3))
+                NotificationCenter.default.post(name: .panesShow, object: show)
             }
         }
     }
 }
 
+extension Notification.Name {
+    /// Test hook: which screen to show (see PanesApp.autoOpen).
+    static let panesShow = Notification.Name("panesShow")
+}
+
+/// The colours from docs/UI.md.
+enum Palette {
+    static let ground = Color(red: 0.043, green: 0.047, blue: 0.055)
+    static let surface = Color(red: 0.086, green: 0.094, blue: 0.11)
+    static let field = Color(red: 0.11, green: 0.118, blue: 0.137)
+    static let raised = Color(red: 0.149, green: 0.161, blue: 0.188)
+    static let text = Color(red: 0.949, green: 0.953, blue: 0.961)
+    static let secondary = Color(red: 0.639, green: 0.659, blue: 0.702)
+    static let link = Color(red: 0.541, green: 0.722, blue: 1.0)
+    static let bar = Color(red: 0.11, green: 0.118, blue: 0.137).opacity(0.92)
+}
+
 struct ContentView: View {
+    enum Screen { case tab, grid, search }
+
     @EnvironmentObject var store: Store
-    @State private var picking = false
+    @StateObject private var catalog = Catalog()
+    @State private var screen: Screen = .tab
+    /// Where search goes back to.
+    @State private var searchFrom: Screen = .tab
     @State private var keyboard = false
-    @State private var viewport = CGSize(width: 393, height: 700)
+    @State private var slideForward = true
+    @State private var sending: PaneTab?
+    @State private var settings = false
+    @State private var query = ""
 
     var body: some View {
-        VStack(spacing: 0) {
-            tabStrip
-            Divider()
+        ZStack {
+            Palette.ground.ignoresSafeArea()
+            VStack(spacing: 0) {
+                tabArea
+                BottomBar(keyboard: $keyboard, step: step, showGrid: { show(.grid) }, showSearch: { show(.search) })
+            }
+            if screen == .grid {
+                TabGridView(close: { show(.tab) }, search: { show(.search) },
+                            send: { sending = $0 }, settings: { settings = true }, pick: { id in
+                                store.select(id)
+                                show(.tab)
+                            })
+                .transition(.opacity.combined(with: .scale(scale: 1.04)))
+                .zIndex(1)
+            }
+            if screen == .search {
+                SearchView(catalog: catalog, query: $query, done: {
+                    query = ""
+                    show(searchFrom == .search ? .tab : searchFrom)
+                }, opened: {
+                    query = ""
+                    show(.tab)
+                })
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(2)
+            }
+            NoticeBanner().zIndex(3)
+        }
+        .sheet(item: $sending) { tab in SendSheet(tab: tab) { sending = nil } }
+        .sheet(isPresented: $settings) { SettingsSheet() }
+        .onReceive(NotificationCenter.default.publisher(for: .panesShow)) { note in
+            switch note.object as? String {
+            case "grid": show(.grid)
+            case "search":
+                query = ProcessInfo.processInfo.environment["PANES_QUERY"] ?? ""
+                show(.search)
+            case "send": sending = store.current
+            case "settings": settings = true
+            default: break
+            }
+        }
+    }
+
+    private var tabArea: some View {
+        GeometryReader { g in
             ZStack {
                 if let tab = store.current {
                     TabScreen(tab: tab, keyboard: $keyboard)
                         .id(tab.id)
+                        .transition(.asymmetric(insertion: .move(edge: slideForward ? .trailing : .leading),
+                                                removal: .move(edge: slideForward ? .leading : .trailing)))
                 } else {
-                    empty
+                    EmptyTabs { show(.search) }
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(GeometryReader { g in
-                Color.clear.onAppear { viewport = g.size }.onChange(of: g.size) { _, s in viewport = s }
-            })
-        }
-        .background(Color.black)
-        .sheet(isPresented: $picking) {
-            PickerView(viewport: viewport, open: { window, machine, fit in
-                picking = false
-                store.open(window, on: machine, fit: fit, viewport: viewport)
-            }, openTerminal: { machine in
-                picking = false
-                store.openTerminal(on: machine)
-            }, openApp: { app, machine in
-                picking = false
-                store.openApp(app, on: machine)
-            })
+            .frame(width: g.size.width, height: g.size.height)
+            .clipped()
+            .onAppear { store.viewport = g.size }
+            .onChange(of: g.size) { _, s in store.viewport = s }
         }
     }
 
-    private var tabStrip: some View {
-        HStack(spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(store.tabs) { tab in
-                        TabChip(tab: tab, selected: tab.id == store.selected,
-                                select: { store.select(tab.id) }, close: { store.close(tab) })
-                    }
-                }
-                .padding(.horizontal, 10)
-            }
-            if store.current != nil {
-                Button { keyboard.toggle() } label: {
-                    Image(systemName: keyboard ? "keyboard.chevron.compact.down" : "keyboard")
-                }
-                .accessibilityLabel(keyboard ? "Hide keyboard" : "Show keyboard")
-            }
-            Button { picking = true } label: { Image(systemName: "plus").font(.title3.weight(.semibold)) }
-                .accessibilityLabel("Open a window")
-                .padding(.trailing, 12)
-        }
-        .frame(height: 44)
-        .background(.bar)
+    private static let animate = ProcessInfo.processInfo.environment["PANES_UITEST"] == nil
+
+    private func step(_ by: Int) {
+        guard let i = store.currentIndex, store.tabs.indices.contains(i + by) else { return }
+        slideForward = by > 0
+        withAnimation(Self.animate ? .spring(response: 0.32, dampingFraction: 0.9) : nil) { store.move(by: by) }
+        UISelectionFeedbackGenerator().selectionChanged()
     }
 
-    private var empty: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "macwindow.on.rectangle").font(.system(size: 48)).foregroundStyle(.secondary)
-            Text("No windows open").font(.headline)
-            Button("Open a window") { picking = true }.buttonStyle(.borderedProminent)
-        }
+    private func show(_ s: Screen) {
+        if s == .search { searchFrom = screen; catalog.refresh() }
+        if s == .grid { store.refreshPreviews() }
+        if s != .tab { keyboard = false }
+        withAnimation(Self.animate ? .easeOut(duration: 0.22) : nil) { screen = s }
     }
 }
 
-struct TabChip: View {
-    @ObservedObject var tab: PaneTab
-    let selected: Bool
-    let select: () -> Void
-    let close: () -> Void
+/// Keyboard button, the pill (swipe it to change tab, tap or swipe up for all
+/// tabs), search button; one dot per tab above.
+struct BottomBar: View {
+    @EnvironmentObject var store: Store
+    @Binding var keyboard: Bool
+    let step: (Int) -> Void
+    let showGrid: () -> Void
+    let showSearch: () -> Void
+    @GestureState private var drag: CGFloat = 0
 
     var body: some View {
-        HStack(spacing: 6) {
-            Circle().fill(dot).frame(width: 7, height: 7)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(tab.appName).font(.caption.weight(.semibold)).lineLimit(1)
-                Text(tab.machine.name).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+        VStack(spacing: 8) {
+            if store.tabs.count > 1 && !keyboard {
+                HStack(spacing: 5) {
+                    ForEach(store.tabs) { t in
+                        Capsule()
+                            .fill(t.machine.tint)
+                            .frame(width: t.id == store.selected ? 18 : 6, height: 6)
+                            .opacity(t.id == store.selected ? 1 : 0.45)
+                    }
+                }
+                .animation(.easeOut(duration: 0.2), value: store.selected)
+                .accessibilityHidden(true)
             }
-            Button(action: close) { Image(systemName: "xmark").font(.caption2.weight(.bold)) }
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Close \(tab.appName)")
+            HStack(spacing: 8) {
+                RoundButton(system: keyboard ? "keyboard.chevron.compact.down" : "keyboard",
+                            label: keyboard ? "Hide keyboard" : "Show keyboard") { keyboard.toggle() }
+                    .disabled(store.current == nil)
+                    .opacity(store.current == nil ? 0.4 : 1)
+                pill
+                RoundButton(system: "magnifyingglass", label: "Open an app", action: showSearch)
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(selected ? Color.white.opacity(0.16) : Color.white.opacity(0.06), in: Capsule())
-        .onTapGesture(perform: select)
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+        .background(Palette.ground)
     }
 
-    private var dot: Color {
-        switch tab.status {
-        case .live: .green
-        case .connecting: .yellow
-        case .failed: .red
-        case .closed: .gray
+    private var pill: some View {
+        let tab = store.current
+        let i = store.currentIndex ?? 0
+        return HStack(spacing: 0) {
+            Button { step(-1) } label: {
+                Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 40, height: 52)
+            }
+            .opacity(i > 0 ? 1 : 0.3)
+            .accessibilityLabel("Previous tab")
+            Button(action: showGrid) {
+                HStack(spacing: 7) {
+                    if let tab {
+                        Circle().fill(tab.machine.tint).frame(width: 9, height: 9)
+                        Text(tab.appName).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        Text(tab.machine.name).font(.subheadline).foregroundStyle(Palette.secondary).lineLimit(1)
+                    } else {
+                        Text("No tabs").font(.subheadline).foregroundStyle(Palette.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .contentShape(Rectangle())
+                .offset(x: drag * 0.4)
+            }
+            .accessibilityLabel(tab.map { "\($0.appName) on \($0.machine.name), tab \(i + 1) of \(store.tabs.count). Show all tabs" }
+                                ?? "Show all tabs")
+            .accessibilityIdentifier("pill")
+            Button { step(1) } label: {
+                Image(systemName: "chevron.right").font(.body.weight(.semibold)).frame(width: 40, height: 52)
+            }
+            .opacity(i < store.tabs.count - 1 ? 1 : 0.3)
+            .accessibilityLabel("Next tab")
         }
+        .foregroundStyle(Palette.text)
+        .background(Palette.bar, in: Capsule())
+        .overlay(Capsule().stroke(Color.white.opacity(0.08)))
+        .contentShape(Capsule())
+        // A drag wins over the buttons inside; a tap still reaches them.
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 14)
+                .updating($drag) { v, state, _ in
+                    if abs(v.translation.width) > abs(v.translation.height) { state = v.translation.width }
+                }
+                .onEnded { v in
+                    let t = v.translation
+                    if abs(t.width) > abs(t.height), abs(t.width) > 36 {
+                        step(t.width < 0 ? 1 : -1)
+                    } else if t.height < -28 {
+                        showGrid()
+                    }
+                }
+        )
+    }
+}
+
+struct RoundButton: View {
+    let system: String
+    let label: String
+    let action: () -> Void
+
+    init(system: String, label: String, action: @escaping () -> Void) {
+        self.system = system
+        self.label = label
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: 18, weight: .medium))
+                .frame(width: 48, height: 48)
+                .foregroundStyle(Palette.text)
+                .background(Palette.bar, in: Circle())
+                .overlay(Circle().stroke(Color.white.opacity(0.08)))
+        }
+        .accessibilityLabel(label)
+    }
+}
+
+struct EmptyTabs: View {
+    let open: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Nothing open").font(.title3.weight(.semibold))
+            Text("Open an app on any of your machines.").font(.subheadline).foregroundStyle(Palette.secondary)
+            Button(action: open) {
+                Label("Open an app", systemImage: "magnifyingglass").padding(.horizontal, 6)
+            }
+            .buttonStyle(.borderedProminent)
+            .padding(.top, 4)
+        }
+        .multilineTextAlignment(.center)
+        .padding(32)
+    }
+}
+
+/// "Sent…" and "<app> arrived from…" notices; tap one about a tab to switch to it.
+struct NoticeBanner: View {
+    @EnvironmentObject var store: Store
+
+    var body: some View {
+        VStack {
+            if let n = store.notice {
+                Button {
+                    if let id = n.tab, store.tabs.contains(where: { $0.id == id }) { store.select(id) }
+                    store.notice = nil
+                } label: {
+                    Text(n.text)
+                        .font(.subheadline)
+                        .foregroundStyle(Palette.text)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(Palette.raised, in: RoundedRectangle(cornerRadius: 14))
+                        .shadow(color: .black.opacity(0.4), radius: 12, y: 6)
+                }
+                .padding(.horizontal, 16)
+                .accessibilityIdentifier("notice")
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            Spacer()
+        }
+        .padding(.top, 6)
+        .animation(.easeOut(duration: 0.2), value: store.notice)
     }
 }
 
@@ -182,7 +365,7 @@ struct TabScreen: View {
                     .ignoresSafeArea(.keyboard)
             }
             switch tab.status {
-            case .connecting:
+            case .connecting where tab.preview == nil:
                 ProgressView("Connecting to \(tab.machine.name)…").padding().background(.thinMaterial, in: .rect(cornerRadius: 12))
                     .frame(maxHeight: .infinity)
             case .failed(let why):
@@ -202,83 +385,6 @@ struct TabScreen: View {
                     .onTapGesture { tab.notice = nil }
             }
         }
-    }
-}
-
-struct PickerView: View {
-    let viewport: CGSize
-    let open: (WindowInfo, Machine, Bool) -> Void
-    let openTerminal: (Machine) -> Void
-    let openApp: (AppInfo, Machine) -> Void
-    @State private var machine = Machine.defaults[0]
-    @State private var fit = true
-    @AppStorage("streamAudio") private var streamAudio = true
-    @StateObject private var list = WindowList()
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Picker("Machine", selection: $machine) {
-                        ForEach(Machine.defaults) { Text($0.name).tag($0) }
-                    }
-                    if list.features.contains("windows") {
-                        Toggle("Fit window to phone", isOn: $fit)
-                        Toggle("Play the app's sound", isOn: $streamAudio)
-                    }
-                } footer: {
-                    if list.features.contains("windows") {
-                        Text("Fitting resizes the window on the Mac to the phone's shape while the tab is open, and puts it back when you close the tab.")
-                    }
-                }
-                if list.features.contains("terminal") {
-                    Section {
-                        Button { openTerminal(machine) } label: {
-                            Label("New terminal", systemImage: "terminal")
-                        }
-                    } footer: {
-                        Text("Runs in tmux on \(machine.name), so it keeps going when you leave the app.")
-                    }
-                }
-                if list.loading {
-                    HStack { ProgressView(); Text("Asking \(machine.name) for its windows…").foregroundStyle(.secondary) }
-                }
-                if let problem = list.problem {
-                    Text(problem).foregroundStyle(.orange)
-                }
-                if !list.apps.isEmpty {
-                    Section {
-                        ForEach(list.apps) { app in
-                            Button(app.name) { openApp(app, machine) }
-                        }
-                    } header: {
-                        Text("Apps")
-                    } footer: {
-                        Text("Each app runs in its own session on \(machine.name) and keeps running when you leave.")
-                    }
-                }
-                ForEach(groups, id: \.0) { app, windows in
-                    Section(app) {
-                        ForEach(windows) { w in
-                            Button { open(w, machine, fit) } label: {
-                                VStack(alignment: .leading) {
-                                    Text(w.title).lineLimit(2)
-                                    Text("\(Int(w.width)) × \(Int(w.height))").font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Open a window")
-            .navigationBarTitleDisplayMode(.inline)
-            .refreshable { list.load(machine) }
-            .onAppear { list.load(machine) }
-            .onChange(of: machine) { _, m in list.load(m) }
-        }
-    }
-
-    private var groups: [(String, [WindowInfo])] {
-        Dictionary(grouping: list.windows, by: \.app).sorted { $0.key.lowercased() < $1.key.lowercased() }
+        .background(Color.black)
     }
 }
