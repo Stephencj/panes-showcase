@@ -108,6 +108,8 @@ targets:
       - Agent/Peers.swift
       - Agent/WebHTTP.swift
       - Agent/Devices.swift
+      - Agent/MacApps.swift
+      - Agent/Windows.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.stephencjuliano.panes.tests

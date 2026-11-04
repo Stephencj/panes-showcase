@@ -85,6 +85,8 @@ struct SearchView: View {
             store.openTerminal(on: row.machine)
         case .app(let a):
             store.openApp(a, on: row.machine)
+        case .macApp(let a):
+            store.openMacApp(a, on: row.machine)
         case .recent(let ref):
             openRecent(ref, on: row.machine)
         }
@@ -101,6 +103,9 @@ struct SearchView: View {
                 ?? windows.first(where: { $0.app == ref.app && $0.title == ref.title })
                 ?? windows.first(where: { $0.app == ref.app }) {
                 store.open(w, on: m, fit: Store.fitWindows)
+            } else if let id = ref.appID {
+                // Its window is gone: start the app again.
+                store.openMacApp(AppInfo(id: id, name: ref.app), on: m)
             } else {
                 store.flash("\(ref.app) has no window open on \(m.name) right now.")
             }
@@ -122,7 +127,7 @@ struct SearchView: View {
 }
 
 struct SearchRow: Identifiable {
-    enum Target { case window(WindowInfo), terminal, app(AppInfo), recent(TabRef) }
+    enum Target { case window(WindowInfo), terminal, app(AppInfo), macApp(AppInfo), recent(TabRef) }
     let id: String
     let machine: Machine
     let app: String
@@ -137,8 +142,11 @@ struct SearchRow: Identifiable {
     }
 
     /// Everything a machine offers that matches `query`.
+    /// With nothing typed, a machine shows this many of its apps until "All N apps" is tapped.
+    static let appsShown = 8
+
     @MainActor
-    static func rows(for m: Machine, list: WindowList, store: Store, query: String) -> [SearchRow] {
+    static func rows(for m: Machine, list: WindowList, store: Store, query: String, allApps: Bool = true) -> [SearchRow] {
         var out: [SearchRow] = []
         for w in list.windows where Flow.matches(query, [w.app, w.title, m.name]) {
             let open = store.existing(TabRef(machine: m.name, kind: "window", app: w.app, windowID: w.id)) != nil
@@ -147,8 +155,12 @@ struct SearchRow: Identifiable {
         if list.features.contains("terminal"), Flow.matches(query, ["Terminal", "New terminal", "shell tmux", m.name]) {
             out.append(SearchRow(id: "terminal", machine: m, app: "Terminal", detail: "New terminal", open: false, target: .terminal))
         }
-        for a in list.apps where Flow.matches(query, [a.name, a.id, m.name]) {
-            out.append(SearchRow(id: "a" + a.id, machine: m, app: a.name, detail: nil, open: false, target: .app(a)))
+        // A Mac lists every installed app (running or not); a Linux box its desktop apps.
+        let mac = list.features.contains("windows")
+        let apps = list.apps.filter { Flow.matches(query, [$0.name, $0.id, m.name]) }
+        for a in allApps ? apps : Array(apps.prefix(appsShown)) {
+            out.append(SearchRow(id: "a" + a.id, machine: m, app: a.name, detail: mac ? "app" : nil, open: false,
+                                 target: mac ? .macApp(a) : .app(a)))
         }
         return out
     }
@@ -160,9 +172,10 @@ struct MachineResults: View {
     @ObservedObject var list: WindowList
     let query: String
     let pick: (SearchRow) -> Void
+    @State private var expanded = false
 
     var body: some View {
-        let rows = SearchRow.rows(for: machine, list: list, store: store, query: query)
+        let rows = SearchRow.rows(for: machine, list: list, store: store, query: query, allApps: !collapsed)
         if !(query.isEmpty == false && rows.isEmpty && !list.loading && list.problem == nil) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionTitle(text: machine.name, color: machine.tint).padding(.bottom, 4)
@@ -176,9 +189,20 @@ struct MachineResults: View {
                     Text("Can't reach \(machine.name)").foregroundStyle(Palette.secondary).frame(minHeight: 44)
                 }
                 ForEach(rows) { row in ResultRow(row: row) { pick(row) } }
+                if collapsed && list.apps.count > SearchRow.appsShown {
+                    Button { expanded = true } label: {
+                        Text("All \(list.apps.count) apps on \(machine.name)")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Palette.link)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                    .accessibilityIdentifier("all-apps-\(machine.name)")
+                }
             }
         }
     }
+
+    private var collapsed: Bool { query.isEmpty && !expanded }
 }
 
 struct ResultRow: View {

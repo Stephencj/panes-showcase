@@ -504,3 +504,34 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(f.admit(other, now: t0.addingTimeInterval(700)))   // much later it's a new send
     }
 }
+
+
+final class MacAppsTests: XCTestCase {
+    private func makeApp(_ dir: URL, _ name: String, id: String, extra: [String: Any] = [:]) throws {
+        let contents = dir.appendingPathComponent("\(name).app/Contents", isDirectory: true)
+        try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
+        var info: [String: Any] = ["CFBundleIdentifier": id, "CFBundleName": name, "CFBundlePackageType": "APPL"]
+        info.merge(extra) { $1 }
+        try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+            .write(to: contents.appendingPathComponent("Info.plist"))
+    }
+
+    func testListsAppsWithWindowsSortedAndOnce() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("panes-apps-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let a = root.appendingPathComponent("A"), b = root.appendingPathComponent("B")
+        try makeApp(a, "Xcode", id: "com.example.xcode")
+        try makeApp(a, "Menu Helper", id: "com.example.helper", extra: ["LSUIElement": true])
+        try makeApp(a, "Daemon", id: "com.example.daemon", extra: ["LSBackgroundOnly": true])
+        try makeApp(a.appendingPathComponent("Suite"), "Writer", id: "com.example.writer")   // one folder down
+        try makeApp(b, "Xcode", id: "com.example.xcode")   // same app twice: listed once
+        try makeApp(b, "audio unit", id: "com.example.au")
+        let apps = MacApps.installed(in: [a, b, root.appendingPathComponent("missing")])
+        XCTAssertEqual(apps.map(\.name), ["audio unit", "Writer", "Xcode"])
+        XCTAssertEqual(apps.last?.id, "com.example.xcode")
+    }
+
+    func testThisMacHasApps() {
+        XCTAssertFalse(MacApps.installed().isEmpty)
+    }
+}

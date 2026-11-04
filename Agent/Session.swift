@@ -72,7 +72,7 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
         switch msg.op {
         case "hello":
             var hello = Control(op: "hello", version: Wire.version, machine: Host.current().localizedName ?? "Mac",
-                                features: ["windows", "terminal", "devices", "snapshot"])
+                                features: ["windows", "terminal", "devices", "snapshot", "apps"])
             hello.web = Agent.peers.webAddress()
             send(hello)
             if let problem = Agent.permissionProblem() { send(Control(op: "error", error: problem)) }
@@ -80,6 +80,21 @@ final class Session: NSObject, SCStreamOutput, SCStreamDelegate {
             Task {
                 do { send(Control(op: "windows", windows: try await Windows.list())) }
                 catch { send(Control(op: "error", error: "Can't list windows: \(error.localizedDescription)")) }
+            }
+        case "apps":
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                self?.send(Control(op: "apps", apps: MacApps.installed()))
+            }
+        case "openApp":
+            // An app that may not be running yet: start it, then stream its window.
+            guard let bundleID = msg.app else { return }
+            Task {
+                do {
+                    let id = try await MacApps.open(bundleID)
+                    await open(id, viewport: msg.viewport, zoom: msg.zoom, withAudio: msg.audio ?? false)
+                } catch {
+                    send(Control(op: "error", error: "\(error)"))
+                }
             }
         case "open":
             guard let id = msg.windowID else { return }

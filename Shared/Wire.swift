@@ -154,7 +154,8 @@ struct FrameReader {
 /// phone → agent: hello, list, open(windowID, viewport, zoom), input(event),
 ///                keyframe, pause, resume, terminal(name, cols, rows), resize(cols, rows),
 ///                apps, launch(app, name), snapshot(width),
-///                device(device), devices, send(to, tab, name), forget(device)
+///                device(device), devices, send(to, tab, name), forget(device),
+///                openApp(app, viewport, zoom, audio) (Mac: start an app, stream its window)
 /// agent → phone: hello(machine, features), windows(windows), opened(windowID,
 ///                title, app, width, height), resized(width, height), closed,
 ///                terminalOpened(name), exited, apps(apps), launched(app, url),

@@ -366,7 +366,7 @@ struct TabScreen: View {
             }
             switch tab.status {
             case .connecting where tab.preview == nil:
-                ProgressView("Connecting to \(tab.machine.name)…").padding().background(.thinMaterial, in: .rect(cornerRadius: 12))
+                ProgressView(tab.startingApp ? "Opening \(tab.appName) on \(tab.machine.name)…" : "Connecting to \(tab.machine.name)…").padding().background(.thinMaterial, in: .rect(cornerRadius: 12))
                     .frame(maxHeight: .infinity)
             case .failed(let why):
                 VStack(spacing: 10) {

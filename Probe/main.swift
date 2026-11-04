@@ -16,13 +16,17 @@ var opts: [String: String] = [:]
 while let key = args.popFirst() { if key.hasPrefix("--") { opts[String(key.dropFirst(2))] = args.popFirst() ?? "" } }
 let terminalMode = opts["terminal"] != nil
 let devicesMode = opts["devices"] != nil
+let macAppsMode = opts["mac-apps"] != nil
+let openAppID = opts["open-app"]
 let appNeedle = opts["app"]
-guard let titleNeedle = opts["title"] ?? (terminalMode || appNeedle != nil || devicesMode ? "" : nil) else {
+guard let titleNeedle = opts["title"] ?? (terminalMode || appNeedle != nil || devicesMode || macAppsMode || openAppID != nil ? "" : nil) else {
     print("usage: panes-probe --title TEXT [--host H] [--port P] [--fit WxH] [--type TEXT] [--png PATH]")
     print("       panes-probe --terminal NAME [--host H] [--port P]   (runs a command in a terminal tab)")
     print("       panes-probe --app TEXT [--host H]   (launches a Linux app; checks its web client answers)")
     print("       panes-probe --devices 1 [--host H]   (two made-up devices send each other a tab, then are forgotten)")
     print("       panes-probe --title TEXT --snapshot out.jpg   (asks for a window preview)")
+    print("       panes-probe --mac-apps 1   (lists a Mac's installed apps)")
+    print("       panes-probe --open-app <bundle id> [--fit WxH]   (starts a Mac app and streams its window)")
     exit(2)
 }
 var terminalOutput = ""
@@ -124,7 +128,16 @@ func handle(_ frame: Frame) {
             summary["machine"] = msg.machine
             summary["features"] = msg.features
             webBase = msg.web.flatMap(URL.init(string:))
-            if devicesMode {
+            if macAppsMode {
+                send(Control(op: "apps"))
+            } else if let id = openAppID {
+                var viewport: Size?
+                if let fit = opts["fit"] {
+                    let p = fit.split(separator: "x").compactMap { Double($0) }
+                    if p.count == 2 { viewport = Size(width: p[0], height: p[1]) }
+                }
+                send(Control(op: "openApp", viewport: viewport, app: id))
+            } else if devicesMode {
                 devicesStep()
             } else if terminalMode {
                 send(Control(op: "terminal", name: opts["terminal"], cols: 100, rows: 30))
@@ -133,6 +146,12 @@ func handle(_ frame: Frame) {
             } else {
                 send(Control(op: "list"))
             }
+        case "apps" where macAppsMode:
+            let apps = msg.apps ?? []
+            summary["appCount"] = apps.count
+            summary["some"] = apps.prefix(8).map(\.name)
+            summary["hasXcode"] = apps.contains { $0.id == "com.apple.dt.Xcode" }
+            finish(!apps.isEmpty)
         case "apps":
             let apps = msg.apps ?? []
             summary["appCount"] = apps.count
@@ -179,6 +198,7 @@ func handle(_ frame: Frame) {
             send(Control(op: "open", windowID: w.id, viewport: viewport, audio: opts["audio"] != nil))
         case "opened":
             summary["opened"] = "\(Int(msg.width ?? 0))x\(Int(msg.height ?? 0)) pt"
+            if openAppID != nil { summary["window"] = "\(msg.app ?? "") — \(msg.title ?? "") (\(msg.windowID ?? 0))" }
         case "inbox", "devices":
             if devicesMode { devicesStep(msg) }
         case "error":

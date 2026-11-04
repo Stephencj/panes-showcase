@@ -15,9 +15,12 @@ dd=$work/dd
 mkdir -p $work/shots $work/mac-state $work/linux-state
 pids=()
 tmux_before=$(tmux ls -F '#S' 2>/dev/null | sort)
+# The test starts Chess on the Mac; quit it afterwards only if it wasn't already open.
+chess_running=$(pgrep -x Chess >/dev/null && echo yes)
 
 cleanup() {
   for p in $pids; do kill $p 2>/dev/null; done
+  [[ -z $chess_running ]] && killall Chess 2>/dev/null
   xcrun simctl spawn "$sim" log show --last 10m --style compact --predicate 'process == "Panes"' > $work/app.log 2>/dev/null
   xcrun simctl shutdown "$sim" 2>/dev/null
   # Only the tmux sessions this run made.

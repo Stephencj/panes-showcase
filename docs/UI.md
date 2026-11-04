@@ -92,6 +92,31 @@ name (default "iPhone"), "Fit windows to the phone", "Play the app's sound".
 - The web client must be installable as a web app (manifest + icons) so it
   can be its own window on each OS; a native wrapper can come later.
 
+## Opening any app
+
+Search lists every app a machine has, running or not.
+
+- A Mac's agent answers `apps` with every installed app that has a window
+  (/Applications, /System/Applications, their Utilities, ~/Applications; one
+  level of subfolders), `id` being the bundle id. Picking one makes a window
+  tab that sends `{"op":"openApp","app":"<bundle id>",viewport,zoom,audio}`
+  instead of `open`: the agent starts the app (or brings it forward, which
+  asks it to reopen a window), waits up to 25 s for a window, and streams it
+  exactly as `open` would; `opened` carries the window's id, which the tab
+  uses from then on. A window TabRef carries the bundle id as `appID`, so a
+  window that's gone can be reopened by starting its app.
+- A Linux box's `apps` are its desktop apps, launched in Xpra (docs/WEB.md).
+- With nothing typed, a machine shows its first 8 apps and an "All N apps"
+  row that shows the rest in place.
+
+## Who may connect from the machine itself
+
+Loopback callers used to be trusted outright. The Linux agent now checks
+which account owns the calling socket (its port pair in /proc/net/tcp): only
+the agent's own account may use port 7890, and on 7891 also tailscaled (which
+publishes Panes Web). Without /proc (not Linux) loopback is trusted as before;
+a Mac is assumed to be single-user.
+
 ## Tabs on other devices: protocol
 
 Each phone or browser is a **device** with an id it makes up once (letters,

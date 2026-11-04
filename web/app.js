@@ -322,9 +322,10 @@ class PaneTab {
       kind: k.type,
       app: this.appName,
       title: this.title || undefined,
-      windowID: k.type === 'window' ? k.window.id : undefined,
+      windowID: k.type === 'window' && k.window.id ? k.window.id : undefined,
       session: k.session,
-      appID: k.type === 'app' ? k.app.id : undefined,
+      // A Mac window carries its app's bundle id, so a later visit can start the app.
+      appID: k.type === 'app' ? k.app.id : k.type === 'window' ? k.window.bundleID || undefined : undefined,
     };
   }
 
@@ -443,7 +444,12 @@ class PaneTab {
     if (k.type === 'window') {
       const stage = $('stage');
       const viewport = this.fit ? { width: stage.clientWidth, height: stage.clientHeight } : undefined;
-      this.link.send({ op: 'open', windowID: k.window.id, viewport, zoom: 1.0, audio: this.audioOn });
+      if (!k.window.id && k.window.bundleID) {
+        // A Mac app that may not be running: the agent starts it and streams its window.
+        this.link.send({ op: 'openApp', app: k.window.bundleID, viewport, zoom: 1.0, audio: this.audioOn });
+      } else {
+        this.link.send({ op: 'open', windowID: k.window.id, viewport, zoom: 1.0, audio: this.audioOn });
+      }
       if (!this.active) this.link.send({ op: 'pause' });
     } else if (k.type === 'terminal') {
       this.fitTerminal();
@@ -457,6 +463,12 @@ class PaneTab {
     switch (msg.op) {
       case 'opened':
         this.live();
+        // A started app's window: from now on (reconnects, other devices) it's that window.
+        if (msg.windowID && this.kind.type === 'window' && !this.kind.window.id) {
+          this.kind.window.id = msg.windowID;
+          if (msg.title) this.kind.window.title = msg.title;
+          this.store.persist();
+        }
         if (msg.title) this.title = msg.title;
         if (msg.width && msg.height) this.windowSize = { width: msg.width, height: msg.height };
         this.store.render();
@@ -903,7 +915,7 @@ function catalogOf(machine) {
 /// one elsewhere uses the same window or session).
 function sameRef(a, b) {
   if (a.machine !== b.machine || a.kind !== b.kind) return false;
-  if (a.kind === 'window') return a.windowID === b.windowID;
+  if (a.kind === 'window') return a.windowID != null && a.windowID === b.windowID;
   if (a.session || b.session) return a.session === b.session;
   return a.appID === b.appID;
 }
@@ -942,7 +954,10 @@ class Store {
     if (!machine) return null;
     const how = { select };
     if (ref.kind === 'window' && ref.windowID != null) {
-      return this.openWindow({ id: ref.windowID, app: ref.app, title: ref.title || '' }, machine, this.options(), how);
+      return this.openWindow({ id: ref.windowID, app: ref.app, title: ref.title || '', bundleID: ref.appID }, machine, this.options(), how);
+    }
+    if (ref.kind === 'window' && ref.appID) {
+      return this.openWindow({ id: 0, app: ref.app, title: ref.app, bundleID: ref.appID }, machine, this.options(), how);
     }
     if (ref.kind === 'terminal') return this.openTerminal(machine, ref.session || newSessionName(), how);
     if (ref.kind === 'app' && ref.appID) return this.openApp({ id: ref.appID, name: ref.app }, machine, ref.session || newSessionName(), how);
@@ -1087,12 +1102,16 @@ const Toast = {
 // MARK: palette
 
 /// The command palette: one search over every machine at once (docs/UI.md, Search).
+const APPS_SHOWN = 8;
+
 class Palette {
   constructor(store, machines) {
     this.store = store;
     this.machines = machines;
     /// machine name → {loading, failed, windows, apps, features, problem}
     this.state = new Map();
+    /// Machines whose full app list is showing.
+    this.expanded = new Set();
     this.rows = [];
     this.selectedKey = null;
     this.generation = 0;
@@ -1164,8 +1183,12 @@ class Palette {
         if (r.kind === 'window') {
           // A window that's gone isn't offered; one still there uses its live title.
           const live = st && !st.loading && !st.failed ? st.windows.find((w) => w.id === r.windowID) : null;
-          if (st && !st.loading && !st.failed && !live) continue;
           if (live) ref = { ...r, title: live.title, app: live.app };
+          // A window that's gone: start its app again if we know it, else skip it.
+          else if (st && !st.loading && !st.failed) {
+            if (!r.appID) continue;
+            ref = { machine: r.machine, kind: 'window', app: r.app, appID: r.appID };
+          }
         }
         rows.push(this.refRow(machine, ref, 'recent'));
       }
@@ -1200,8 +1223,23 @@ class Palette {
           },
         });
       }
-      for (const a of st.apps) {
+      const mac = st.features.includes('windows');
+      // With nothing typed, a machine shows its first few apps until "All N apps" is picked.
+      const collapsed = !terms.length && !this.expanded.has(m.name) && st.apps.length > APPS_SHOWN;
+      for (const a of collapsed ? st.apps.slice(0, APPS_SHOWN) : st.apps) {
         if (!matches(a.name, m.name)) continue;
+        if (mac) {
+          // Any installed Mac app, running or not: the agent starts it if needed.
+          const ref = { machine: m.name, kind: 'window', app: a.name, appID: a.id };
+          rows.push({
+            key: `${m.name}|macapp|${a.id}`, machine: m, app: a.name, sub: `${m.name} · app`, action: 'Open', ref,
+            go: () => {
+              this.store.openWindow({ id: 0, app: a.name, title: a.name, bundleID: a.id }, m);
+              Recent.remember(ref);
+            },
+          });
+          continue;
+        }
         const ref = { machine: m.name, kind: 'app', app: a.name, appID: a.id };
         const open = this.store.tabs.find((t) => t.machine === m && t.kind.type === 'app' && t.kind.app.id === a.id);
         rows.push({
@@ -1212,6 +1250,12 @@ class Palette {
             else this.store.openApp(a, m);
             Recent.remember(ref);
           },
+        });
+      }
+      if (collapsed) {
+        rows.push({
+          key: `${m.name}|allapps`, machine: m, app: `All ${st.apps.length} apps`, letter: '…', sub: m.name, action: 'Show', more: true,
+          go: () => { this.expanded.add(m.name); this.render(); },
         });
       }
       let status = null;
@@ -1312,7 +1356,8 @@ class Palette {
   }
 
   pick(r) {
-    this.hide();
+    // "All N apps" grows the list in place; everything else opens something.
+    if (!r.more) this.hide();
     r.go();
   }
 

@@ -367,6 +367,49 @@ class DeviceBookTests(unittest.TestCase):
             self.assertEqual(book.report({"id": "x", "name": "X", "kind": "phone", "tabs": []})[0]["tab"], self.TAB)
 
 
+class LoopbackOwnerTests(unittest.TestCase):
+    # /proc/net/tcp: sl local_address rem_address st tx:rx tr:when retrnsmt uid ...
+    TABLE = (
+        "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+        "   0: 0100007F:1ED2 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 1 1\n"
+        "   1: 0100007F:A1B2 0100007F:1ED2 01 00000000:00000000 00:00000000 00000000  1001        0 2 1\n"
+        "   2: 0100007F:C3D4 0100007F:1ED2 01 00000000:00000000 00:00000000 00000000  1000        0 3 1\n"
+        "   3: 0100007F:E5F6 0100007F:1ED3 01 00000000:00000000 00:00000000 00000000     0        0 4 1\n"
+    )
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.tcp = os.path.join(self.dir.name, "tcp")
+        with open(self.tcp, "w") as f:
+            f.write(self.TABLE)
+        self.tables = (self.tcp, os.path.join(self.dir.name, "missing"))
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def test_owner_is_found_by_the_port_pair(self):
+        self.assertEqual(pa.socket_owner_uid(0xA1B2, 7890, self.tables), 1001)
+        self.assertEqual(pa.socket_owner_uid(0xC3D4, 7890, self.tables), 1000)
+        self.assertIsNone(pa.socket_owner_uid(0xA1B2, 7891, self.tables))
+
+    def test_only_our_account_or_tailscaled_gets_in(self):
+        ok = lambda p, l, extra=(): pa.loopback_caller_allowed(p, l, extra, self.tables, my_uid=1000)
+        self.assertTrue(ok(0xC3D4, 7890))            # us
+        self.assertFalse(ok(0xA1B2, 7890))           # another account (solbot)
+        self.assertFalse(ok(0xE5F6, 7891))           # root, but tailscaled isn't root here
+        self.assertTrue(ok(0xE5F6, 7891, {0}))       # tailscaled publishing Panes Web
+        self.assertTrue(ok(0x9999, 7890))            # not in /proc: trusted as before
+
+    def test_process_uids_reads_comm(self):
+        proc = os.path.join(self.dir.name, "proc")
+        for pid, name in ((10, "tailscaled"), (11, "bash")):
+            os.makedirs(os.path.join(proc, str(pid)))
+            with open(os.path.join(proc, str(pid), "comm"), "w") as f:
+                f.write(name + "\n")
+        self.assertEqual(pa.process_uids("tailscaled", proc), {os.getuid()})
+        self.assertEqual(pa.process_uids("nope", proc), set())
+
+
 class WebEndToEndTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.dir = tempfile.TemporaryDirectory()
