@@ -39,6 +39,7 @@ var decoder: VTDecompressionSession?
 var framesSeen = 0
 var keyframesSeen = 0
 var typed = false
+var webBase: URL?
 var done = false
 
 func finish(_ ok: Bool, _ note: String? = nil) {
@@ -122,6 +123,7 @@ func handle(_ frame: Frame) {
         case "hello":
             summary["machine"] = msg.machine
             summary["features"] = msg.features
+            webBase = msg.web.flatMap(URL.init(string:))
             if devicesMode {
                 devicesStep()
             } else if terminalMode {
@@ -141,7 +143,8 @@ func handle(_ frame: Frame) {
             send(Control(op: "launch", app: a.id, name: opts["session"] ?? "panes-probe-app"))
         case "launched":
             summary["launchedMs"] = Int(Date().timeIntervalSince(started) * 1000)
-            guard let u = msg.url.flatMap(URL.init(string:)) else { return finish(false, "no url") }
+            // Agents send a path on their Panes Web address (docs/WEB.md).
+            guard let u = msg.url.flatMap({ URL(string: $0, relativeTo: webBase)?.absoluteURL }) else { return finish(false, "no url") }
             summary["url"] = u.absoluteString.replacingOccurrences(of: #"password=[^&]+"#, with: "password=…", options: .regularExpression)
             URLSession.shared.dataTask(with: u) { data, resp, err in
                 DispatchQueue.main.async {
@@ -149,6 +152,9 @@ func handle(_ frame: Frame) {
                     let page = String(decoding: data ?? Data(), as: UTF8.self)
                     summary["httpStatus"] = code
                     summary["looksLikeXpra"] = page.localizedCaseInsensitiveContains("xpra")
+                    // Leave nothing running on the box: end the app's session.
+                    send(Control(op: "end", name: opts["session"] ?? "panes-probe-app"))
+                    Thread.sleep(forTimeInterval: 0.5)
                     finish(code == 200 && page.localizedCaseInsensitiveContains("xpra"), err.map { "\($0)" })
                 }
             }.resume()
