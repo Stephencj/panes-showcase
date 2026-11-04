@@ -374,6 +374,8 @@ class WebEndToEndTests(unittest.IsolatedAsyncioTestCase):
             f.write("<!doctype html><title>Panes</title>")
         with open(os.path.join(self.dir.name, "machines.json"), "w") as f:
             f.write("[]")
+        with open(os.path.join(self.dir.name, "manifest.webmanifest"), "w") as f:
+            f.write('{"name":"Panes"}')
         self.xpra = pa.Xpra()
         self.server = await pa.start_web(0, pa.Peers(status=STATUS), self.xpra, self.dir.name)
         self.port = self.server.sockets[0].getsockname()[1]
@@ -390,6 +392,9 @@ class WebEndToEndTests(unittest.IsolatedAsyncioTestCase):
                          (200, "text/html; charset=utf-8", b"<!doctype html><title>Panes</title>"))
         status, headers, body = await http(p, f"GET /machines.json HTTP/1.1\r\nHost: localhost:{p}\r\n\r\n")
         self.assertEqual((status, headers["content-type"], body), (200, "application/json", b"[]"))
+        # The install manifest needs its own type, or browsers won't offer to install the web app.
+        status, headers, body = await http(p, f"GET /manifest.webmanifest HTTP/1.1\r\nHost: 127.0.0.1:{p}\r\n\r\n")
+        self.assertEqual((status, headers["content-type"], body), (200, "application/manifest+json", b'{"name":"Panes"}'))
         tailnet = "Host: box.tailnet-example.ts.net:7443\r\nTailscale-User-Login: "
         self.assertEqual((await http(p, f"GET / HTTP/1.1\r\n{tailnet}{OWNER}\r\n\r\n"))[0], 200)
         self.assertEqual((await http(p, f"GET / HTTP/1.1\r\n{tailnet}bob@x.com\r\n\r\n"))[0], 403)

@@ -324,6 +324,9 @@ final class WebServerTests: XCTestCase {
         XCTAssertNil(WebHTTP.staticFile("/vendor", root: root), "folders aren't files")
         XCTAssertNil(WebHTTP.staticFile("/missing.js", root: root))
         XCTAssertEqual(WebHTTP.contentType("js"), "text/javascript; charset=utf-8")
+        // The install manifest needs its own type, or browsers won't offer to install the web app.
+        XCTAssertEqual(WebHTTP.contentType("webmanifest"), "application/manifest+json")
+        XCTAssertEqual(WebHTTP.contentType("woff2"), "font/woff2")
     }
 
     func testOnlyLocalHostsPassWithoutTailscaleIdentity() {
